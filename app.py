@@ -106,7 +106,9 @@ for label, col_name in filter_cols_mapping.items():
     if col_name in df_filtered.columns:
         options = df_filtered[col_name].dropna().unique().tolist()
         options.sort()
-        
+        df_sensored_initial = sensor_data(df) 
+        df = df_sensored_initial.copy() # Gunakan df yang sudah disensor untuk analisis
+        Ini memastikan data **Nama** dan **NPM** (serta semua kolom lain yang mengandung kata kunci tersebut) disensor segera setelah dimuat, sehingga aman saat ditampilkan di tab **Overview** dan **Text (essay)**.
         selected_values = st.sidebar.multiselect(
             f"Pilih {label}:",
             options=options,
