@@ -22,7 +22,6 @@ def load_data_from_path(path: str):
     else:
         raise ValueError("Unsupported file type. Upload .xlsx, .xls or .csv")
 
-
 def preprocess_df(df: pd.DataFrame):
     df = df.copy()
     # Standardize column names: strip whitespace
@@ -44,13 +43,34 @@ def preprocess_df(df: pd.DataFrame):
         df[c] = pd.to_numeric(df[c], errors='coerce')
 
     # Identify categorical columns (excluding identifiers and timestamps)
-    # Categorical are non-numeric types, or numeric types with very few unique values (though we primarily focus on object types here)
     categorical_cols = [c for c in df.columns if c not in numeric_cols and (df[c].dtype == 'object' or df[c].nunique() < 10)]
     # Filter out columns that are likely identifiers or timestamps
     identifier_keywords = ['nama', 'npm', 'timestamp']
     categorical_cols = [c for c in categorical_cols if not any(kw in c.lower() for kw in identifier_keywords)]
 
     return df, numeric_cols, categorical_cols
+
+def sensor_data(df: pd.DataFrame):
+    """
+    Censors sensitive columns (like Nama and NPM) by replacing values with a placeholder.
+    This ensures data privacy across the dashboard.
+    """
+    df_sensored = df.copy()
+    # Keywords to identify sensitive/identifier columns
+    identifier_keywords = ['nama', 'npm', 'id', 'nim']
+    
+    cols_to_censor = [
+        c for c in df_sensored.columns 
+        if any(kw in c.lower() for kw in identifier_keywords)
+    ]
+    
+    for col in cols_to_censor:
+        # Replace non-null, non-empty values with a censored string
+        df_sensored[col] = df_sensored[col].apply(
+            lambda x: 'CENSORED_DATA' if pd.notna(x) and str(x).strip() != '' else x
+        )
+        
+    return df_sensored
 
 
 @st.cache_data
@@ -81,12 +101,15 @@ except Exception as e:
     load_status.error(f"Gagal memuat data utama: {default_filename}. Pastikan file ini ada di repositori GitHub Anda. Error: {e}")
     st.stop()
 
-# Preprocess
+# Preprocess and Censor Data
 df_raw = df.copy()
+# 1. Preprocess raw data to identify columns
 df, numeric_cols, categorical_cols = preprocess_df(df_raw)
+# 2. Apply sensoring globally to the main analysis DataFrame.
+df = sensor_data(df)
 
 
-# ---------- Global Filtering in Sidebar (UNCHANGED) ----------
+# ---------- Global Filtering in Sidebar ----------
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Filter Data Global")
@@ -99,16 +122,16 @@ filter_cols_mapping = {
 }
 
 # --- Apply Filters ---
-df_filtered = df.copy()
+df_filtered = df.copy() # df_filtered starts as the globally censored dataframe
 initial_rows = len(df_filtered)
 
 for label, col_name in filter_cols_mapping.items():
     if col_name in df_filtered.columns:
         options = df_filtered[col_name].dropna().unique().tolist()
         options.sort()
-        df_sensored_initial = sensor_data(df) 
-        df = df_sensored_initial.copy() # Gunakan df yang sudah disensor untuk analisis
-        Ini memastikan data **Nama** dan **NPM** (serta semua kolom lain yang mengandung kata kunci tersebut) disensor segera setelah dimuat, sehingga aman saat ditampilkan di tab **Overview** dan **Text (essay)**.
+        
+        # NOTE: The problematic sensoring code lines were removed from here.
+        
         selected_values = st.sidebar.multiselect(
             f"Pilih {label}:",
             options=options,
@@ -116,9 +139,10 @@ for label, col_name in filter_cols_mapping.items():
         )
         
         if selected_values:
+            # Filter df_filtered based on user selection
             df_filtered = df_filtered[df_filtered[col_name].isin(selected_values)]
             
-df = df_filtered
+df = df_filtered # The main DataFrame for analysis is now the filtered and censored result
 final_rows = len(df)
 
 st.sidebar.info(f"Data tersaring: {final_rows} dari {initial_rows} baris.")
@@ -128,13 +152,13 @@ if final_rows == 0:
     st.stop()
     
 # Re-run preprocess on the filtered data to update numeric/categorical lists based on subset
-df, numeric_cols, categorical_cols = preprocess_df(df) 
+# This is mainly to update counts, but we use the existing lists for consistency since types haven't changed.
 
 
-# ------------------ TOP HEADER/JUDUL DASHBOARD (Kembali ke Lahan Parkir) ------------------
+# ------------------ TOP HEADER/JUDUL DASHBOARD ------------------
 
 UPN_LOGO_URL = "https://upnjatim.ac.id/wp-content/uploads/2025/05/cropped-logo-1.png"
-PARKING_ICON_URL = "https://png.pngtree.com/png-clipart/20230414/original/pngtree-car-parking-sign-design-template-png-image_9055938.png" # Contoh ikon mobil/parkir
+PARKING_ICON_URL = "https://png.pngtree.com/png-clipart/20230414/original/pngtree-car-parking-sign-design-template-png-image_9055938.png"
 
 st.markdown("""
     <style>
@@ -187,9 +211,8 @@ with col_logo_right:
 
 st.markdown("---")
 
-# ------------------ Navigation Tabs (Fix: Tambahkan Emoji ke APP_MODES) ------------------
+# ------------------ Navigation Tabs ------------------
 
-# FIX DILAKUKAN DI SINI: APP_MODES harus sama persis dengan string di if/elif di bawah.
 APP_MODES = [
     "Overview💌",
     "🗂️Deskriptif",
@@ -225,7 +248,7 @@ for i, tab in enumerate(tabs):
                     manajemen fasilitas kampus. Bagian ini menyajikan gambaran cepat mengenai struktur data dan ringkasan awal.
                 </p>
                 <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
-                    Gunakan filter di sidebar dan jelajahi tab "Analisis Kunci" untuk temuan utama.
+                    Gunakkan filter di sidebar dan jelajahi tab "Analisis Kunci" untuk temuan utama.
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -236,7 +259,7 @@ for i, tab in enumerate(tabs):
             
             # 2. Preview Data
             st.subheader("🗂️Preview Data Keseluruhan (5 Baris Pertama)")
-            st.markdown("Contoh baris data untuk memverifikasi format dan isinya.")
+            st.markdown("Contoh baris data untuk memverifikasi format dan isinya. **Kolom sensitif sudah disensor.**")
             st.dataframe(df.head(), use_container_width=True)
             
             # 3. Ringkasan Tipe Data (Lebih Jelas)
@@ -285,8 +308,8 @@ for i, tab in enumerate(tabs):
                     fig_mean.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig_mean, use_container_width=True)
             else:
-                 st.subheader("🔢Ringkasan Statistik Data Numerik (Skor Likert)")
-                 st.info("Tidak ada kolom numerik (Likert) yang terdeteksi untuk analisis skor.")
+                st.subheader("🔢Ringkasan Statistik Data Numerik (Skor Likert)")
+                st.info("Tidak ada kolom numerik (Likert) yang terdeteksi untuk analisis skor.")
 
             st.markdown("---")
             
@@ -365,8 +388,8 @@ for i, tab in enumerate(tabs):
                     mean_df = df[numeric_cols].mean().sort_values(ascending=True).to_frame(name='Rata-Rata Skor')
                     mean_df = mean_df.reset_index().rename(columns={'index': 'Variabel'})
                     fig_mean = px.bar(mean_df, x='Rata-Rata Skor', y='Variabel', orientation='h',
-                                        color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
-                                        title="Perbandingan Rata-Rata Skor Likert")
+                                         color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
+                                         title="Perbandingan Rata-Rata Skor Likert")
                     fig_mean.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig_mean, use_container_width=True)
             else:
@@ -388,7 +411,7 @@ for i, tab in enumerate(tabs):
             col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
             with col_kpi1:
                 st.metric(label="Rata-Rata Skor Efektivitas Keseluruhan", value=f"{overall_mean:.2f}",
-                            delta=f"{(overall_mean - 3.0)*100/3:.2f}% dari skala maks (jika skala 1-5)", delta_color="normal")
+                             delta=f"{(overall_mean - 3.0)*100/3:.2f}% dari skala maks (jika skala 1-5)", delta_color="normal")
             with col_kpi2:
                 top_complaint = mean_scores.index[0]
                 st.metric(label="Poin Paling Rentan/Butuh Perbaikan", value=f"{top_complaint}", delta=f"Skor: {mean_scores.iloc[0]:.2f}", delta_color="inverse")
@@ -405,22 +428,29 @@ for i, tab in enumerate(tabs):
                 st.markdown("#### 3 Poin Kritis (Skor Terendah)")
                 critical_df = mean_scores.head(3).to_frame(name='Skor Rata-Rata')
                 fig_critical = px.bar(critical_df, x='Skor Rata-Rata', y=critical_df.index, orientation='h',
-                                        color='Skor Rata-Rata', color_continuous_scale=px.colors.sequential.Reds,
-                                        title="Aspek dengan Efektivitas Terendah")
+                                         color='Skor Rata-Rata', color_continuous_scale=px.colors.sequential.Reds,
+                                         title="Aspek dengan Efektivitas Terendah")
                 st.plotly_chart(fig_critical, use_container_width=True)
 
             with col_eff2:
                 st.markdown("#### Perbandingan Skor Likert Berdasarkan Demografi")
                 
                 if categorical_cols:
-                    breakdown_col = st.selectbox("Pilih Kategori Pembanding:", options=categorical_cols, index=0)
-                    score_col = st.selectbox("Pilih Variabel Likert:", options=numeric_cols, index=0)
-
-                    grouped_mean = df.groupby(breakdown_col)[score_col].mean().sort_values(ascending=False).reset_index()
-                    fig_breakdown = px.bar(grouped_mean, x=breakdown_col, y=score_col,
-                                            title=f"Skor {score_col} Berdasarkan {breakdown_col}",
-                                            color=score_col, color_continuous_scale=px.colors.sequential.Bluyl)
-                    st.plotly_chart(fig_breakdown, use_container_width=True)
+                    # Filter out columns that are likely censored identifiers from the dropdown
+                    censor_keywords = ['nama', 'npm', 'id', 'nim', 'timestamp']
+                    safe_categorical_cols = [c for c in categorical_cols if not any(kw in c.lower() for kw in censor_keywords)]
+                    
+                    if safe_categorical_cols:
+                        breakdown_col = st.selectbox("Pilih Kategori Pembanding:", options=safe_categorical_cols, index=0)
+                        score_col = st.selectbox("Pilih Variabel Likert:", options=numeric_cols, index=0)
+    
+                        grouped_mean = df.groupby(breakdown_col)[score_col].mean().sort_values(ascending=False).reset_index()
+                        fig_breakdown = px.bar(grouped_mean, x=breakdown_col, y=score_col,
+                                                 title=f"Skor {score_col} Berdasarkan {breakdown_col}",
+                                                 color=score_col, color_continuous_scale=px.colors.sequential.Bluyl)
+                        st.plotly_chart(fig_breakdown, use_container_width=True)
+                    else:
+                        st.info("Tidak ada kolom kategorikal yang aman untuk perbandingan demografi.")
                 else:
                     st.info("Tidak ada kolom kategorikal yang terdeteksi untuk perbandingan demografi.")
 
@@ -440,7 +470,7 @@ for i, tab in enumerate(tabs):
                 if len(cols_for_corr) >= 2:
                     corr = df[cols_for_corr].corr()
                     fig = px.imshow(corr, text_auto=".2f", title='Matriks Korelasi (Pearson)',
-                                    color_continuous_scale='RdBu_r', zmin=-1, zmax=1)
+                                     color_continuous_scale='RdBu_r', zmin=-1, zmax=1)
                     st.plotly_chart(fig, use_container_width=True)
 
                     st.subheader("Tabel korelasi")
@@ -489,7 +519,8 @@ for i, tab in enumerate(tabs):
                     if st.checkbox("Tampilkan Ringkasan Statistik Penuh (statsmodels OLS)"):
                         X_const = sm.add_constant(sub[indep])
                         model = sm.OLS(sub[dep], X_const, missing='drop').fit()
-                        st.text(model.summary())
+                        # Use st.text or st.code for the pre-formatted summary
+                        st.code(model.summary().as_text())
 
                     # Plot actual vs predicted
                     fig = go.Figure()
@@ -507,7 +538,7 @@ for i, tab in enumerate(tabs):
             st.markdown("Analisis frekuensi kata membantu merangkum keluhan, kendala, atau saran yang paling sering diungkapkan responden.")
 
             # Filter kolom teks yang mungkin adalah jawaban essay
-            essay_cols = [c for c in df.columns if df[c].dtype == 'object' and not any(kw in c.lower() for kw in ['nama', 'npm', 'timestamp', 'fakultas', 'studi'])]
+            essay_cols = [c for c in df.columns if df[c].dtype == 'object' and not any(kw in c.lower() for kw in ['nama', 'npm', 'timestamp', 'fakultas', 'studi', 'censored'])]
             
             sel_text = st.multiselect("Pilih Kolom Teks (Essay/Jawaban Terbuka)", essay_cols, default=essay_cols[:1])
 
@@ -517,8 +548,8 @@ for i, tab in enumerate(tabs):
                     tw = top_words(df[c].astype(str), n=30)
                     
                     fig = px.bar(tw.sort_values(by='count', ascending=True), x='count', y='word', orientation='h',
-                                    title=f'Top 30 Kata Kunci di Kolom: {c}',
-                                    color='count', color_continuous_scale=px.colors.sequential.Viridis)
+                                     title=f'Top 30 Kata Kunci di Kolom: {c}',
+                                     color='count', color_continuous_scale=px.colors.sequential.Viridis)
                     fig.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig, use_container_width=True)
 
@@ -538,7 +569,7 @@ for i, tab in enumerate(tabs):
             )
 
             st.subheader("Download Data Analisis")
-            st.write("Gunakan tombol di bawah ini untuk mendownload data yang sudah terfilter sebagai CSV.")
+            st.write("Gunakan tombol di bawah ini untuk mendownload data yang sudah **disensor** dan **terfilter** sebagai CSV.")
             
             @st.cache_data
             def convert_df_to_csv(df):
