@@ -132,7 +132,7 @@ df, numeric_cols, categorical_cols = preprocess_df(df)
 # ------------------ TOP HEADER/JUDUL DASHBOARD (Kembali ke Lahan Parkir) ------------------
 
 UPN_LOGO_URL = "https://upnjatim.ac.id/wp-content/uploads/2025/05/cropped-logo-1.png"
-PARKING_ICON_URL = "https://w7.pngwing.com/pngs/20/812/png-transparent-parking-logo-stop-sign-car-parking-lot-thumbnail.png" # Contoh ikon mobil/parkir
+PARKING_ICON_URL = "https://png.pngtree.com/png-clipart/20190705/original/pngtree-vector-parking-icon-png-image_4184091.jpg" # Contoh ikon mobil/parkir
 
 st.markdown("""
     <style>
