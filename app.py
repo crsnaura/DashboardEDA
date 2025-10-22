@@ -235,7 +235,7 @@ for i, tab in enumerate(tabs):
             # 2. Preview Data
             st.subheader("🗂️Preview Data Keseluruhan (5 Baris Pertama)")
             st.markdown("Contoh baris data untuk memverifikasi format dan isinya.")
-            st.dataframe(df.head(), use_container_width=True)
+            st.dataframe(df_safe.head(), use_container_width=True)
             
             # 3. Ringkasan Tipe Data (Lebih Jelas)
             st.subheader("💌Ringkasan Tipe Data & Klasifikasi Analisis")
