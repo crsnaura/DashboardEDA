@@ -25,7 +25,7 @@ def load_data_from_path(path: str):
 
 def preprocess_df(df: pd.DataFrame):
     df = df.copy()
-    # Standardize column names: strip
+    # Standardize column names: strip whitespace
     df.columns = [c.strip() for c in df.columns]
 
     numeric_cols = []
@@ -43,15 +43,19 @@ def preprocess_df(df: pd.DataFrame):
     for c in numeric_cols:
         df[c] = pd.to_numeric(df[c], errors='coerce')
 
-    return df, numeric_cols
+    # Identify categorical columns (excluding identifiers and timestamps)
+    # Categorical are non-numeric types, or numeric types with very few unique values (though we primarily focus on object types here)
+    categorical_cols = [c for c in df.columns if c not in numeric_cols and (df[c].dtype == 'object' or df[c].nunique() < 10)]
+    # Filter out columns that are likely identifiers or timestamps
+    identifier_keywords = ['nama', 'npm', 'timestamp']
+    categorical_cols = [c for c in categorical_cols if not any(kw in c.lower() for kw in identifier_keywords)]
+
+    return df, numeric_cols, categorical_cols
 
 
 @st.cache_data
 def top_words(text_series, n=30):
-    # Using Indonesian stopwords list for better relevance
-    # Note: 'english' stop_words was used in the original code, switching to a basic Indonesian list
-    # If the user's essay is in English, this needs adjustment, but assuming Indonesian.
-    indonesian_stopwords = set(['yang', 'dan', 'di', 'ke', 'dari', 'tidak', 'dengan', 'saya', 'untuk', 'pada', 'adalah', 'ini', 'itu', 'sangat', 'agar', 'bisa', 'akan'])
+    indonesian_stopwords = set(['yang', 'dan', 'di', 'ke', 'dari', 'tidak', 'dengan', 'saya', 'untuk', 'pada', 'adalah', 'ini', 'itu', 'sangat', 'agar', 'bisa', 'akan', 'juga', 'dalam', 'mereka'])
     vec = CountVectorizer(stop_words=list(indonesian_stopwords), min_df=2)
     cleaned = text_series.fillna("").astype(str).str.lower()
     X = vec.fit_transform(cleaned)
@@ -61,29 +65,25 @@ def top_words(text_series, n=30):
     return pd.DataFrame({"word": terms[top_idx], "count": s[top_idx]})
 
 
-# ---------- Layout & Data Loading (Diubah untuk Auto-Load) ----------
+# ---------- Layout & Data Loading ----------
 st.sidebar.title("Kontrol Dashboard & Filter")
 
-# --- Bagian Data Loading Diubah ---
-# Catatan Penting: Agar ini berfungsi di Streamlit Cloud, file Responden.xlsx
-# HARUS sudah diunggah ke repositori GitHub BERSAMA app.py.
-
+# --- Bagian Data Loading ---
 default_filename = "Responden.xlsx"
 df = None
-load_status = st.sidebar.empty() # Placeholder untuk pesan loading
+load_status = st.sidebar.empty()
 
 try:
     load_status.info(f"Memuat data dari {default_filename}...")
     df = load_data_from_path(default_filename)
     load_status.success("Data berhasil dimuat!")
 except Exception as e:
-    # Jika gagal (misalnya file tidak ada di repo), tampilkan error dan hentikan
     load_status.error(f"Gagal memuat data utama: {default_filename}. Pastikan file ini ada di repositori GitHub Anda. Error: {e}")
-    st.stop() # Hentikan proses jika data utama tidak ditemukan.
+    st.stop()
 
 # Preprocess
 df_raw = df.copy()
-df, numeric_cols = preprocess_df(df_raw)
+df, numeric_cols, categorical_cols = preprocess_df(df_raw)
 
 
 # ---------- Global Filtering in Sidebar (UNCHANGED) ----------
@@ -94,10 +94,8 @@ st.sidebar.subheader("Filter Data Global")
 # List of columns to be used as filters
 filter_cols_mapping = {
     "Fakultas": "Fakultas",
-    "Program Studi": "Program Studi",
-    "Nama Responden": "Nama",
-    "Nomor Pokok Mahasiswa (NPM)": "NPM",
-    "Timestamp (Waktu Pengisian)": "Timestamp"
+    "Program Studi": "Program Studi"
+    # Other filter columns can be added here if needed
 }
 
 # --- Apply Filters ---
@@ -106,22 +104,18 @@ initial_rows = len(df_filtered)
 
 for label, col_name in filter_cols_mapping.items():
     if col_name in df_filtered.columns:
-        # Get unique, non-null sorted values of selected column
         options = df_filtered[col_name].dropna().unique().tolist()
         options.sort()
         
-        # Display multiselect filter in sidebar
         selected_values = st.sidebar.multiselect(
             f"Pilih {label}:",
             options=options,
-            default=options # Default to all selected
+            default=options
         )
         
-        # Apply filter to the DataFrame
         if selected_values:
             df_filtered = df_filtered[df_filtered[col_name].isin(selected_values)]
             
-# Use the filtered DataFrame for all subsequent analysis
 df = df_filtered
 final_rows = len(df)
 
@@ -131,17 +125,13 @@ if final_rows == 0:
     st.error("Semua data terfilter habis. Sesuaikan pilihan filter Anda.")
     st.stop()
     
-# Re-preprocess to update numeric_cols based on filtered data (important for describe())
-# Though preprocess_df doesn't rely on data subsetting, it's safer to ensure consistency
-df, numeric_cols = preprocess_df(df_raw) # Re-run with original data structure, then use df_filtered
-# Since df is now df_filtered, we re-run preprocess on the original df_raw only to get ALL numeric columns consistently.
+# Re-run preprocess on the filtered data to update numeric/categorical lists based on subset
+df, numeric_cols, categorical_cols = preprocess_df(df) 
 
-# ------------------ TOP HEADER/JUDUL DASHBOARD (Meniru style rapih) ------------------
 
-# URL Logo UPN "Veteran" Jawa Timur.
-# >>> PERBAIKAN: Menggunakan URL Logo UPN baru dari input user terbaru
+# ------------------ TOP HEADER/JUDUL DASHBOARD (Kembali ke Lahan Parkir) ------------------
+
 UPN_LOGO_URL = "https://upnjatim.ac.id/wp-content/uploads/2025/05/cropped-logo-1.png"
-# URL Logo Parkir/Ikon (menggunakan ikon mobil/parkir)
 PARKING_ICON_URL = "https://w7.pngwing.com/pngs/46/320/png-transparent-parking-car-park-others-miscellaneous-blue-text.png" # Contoh ikon mobil/parkir
 
 st.markdown("""
@@ -153,7 +143,8 @@ st.markdown("""
         justify-content: space-between;
         padding: 20px 0;
         margin-bottom: 20px;
-        border-bottom: 2px solid #333333; /* Garis pemisah */
+        border-bottom: 2px solid #333333;
+        
     }
     .header-title {
         text-align: center;
@@ -163,7 +154,7 @@ st.markdown("""
         font-size: 2.5em;
         font-weight: 700;
         margin: 0;
-        color: #1E90FF; /* Warna biru UPN */
+        color: #1E90FF;
     }
     .header-title h3 {
         font-size: 1.2em;
@@ -171,19 +162,12 @@ st.markdown("""
         color: #AAAAAA;
         margin-top: 5px;
     }
-    .header-logo {
-        width: 100px; /* Ukuran logo */
-        height: 100px;
-        object-fit: contain;
-    }
     </style>
     """, unsafe_allow_html=True)
 
-# Membuat tata letak header menggunakan st.columns dan HTML/CSS kustom
 col_logo_left, col_title, col_logo_right = st.columns([1, 4, 1])
 
 with col_logo_left:
-    # Menggunakan ikon UPN
     st.image(UPN_LOGO_URL, use_container_width=True)
 
 with col_title:
@@ -195,17 +179,15 @@ with col_title:
     """, unsafe_allow_html=True)
 
 with col_logo_right:
-    # Menggunakan ikon Parkir
     st.image(PARKING_ICON_URL, use_container_width=True)
 
-st.markdown("---") # Garis pemisah setelah header
+st.markdown("---")
 
-# ------------------ Navigation Tabs (UNCHANGED) ------------------
+# ------------------ Navigation Tabs (Menjaga nama Analisis Kunci) ------------------
 
-# Define all app modes (pages)
 APP_MODES = ["Overview", "Deskriptif", "Analisis Kunci (Efektivitas Parkir)", "Korelasi", "Regresi Linear Berganda", "Teks (essay)", "Download & Petunjuk"]
 
-# Create tabs for navigation instead of sidebar selectbox
+# Mengganti sidebar selectbox dengan tabs
 tabs = st.tabs(APP_MODES)
 
 # Map tab index to app_mode
@@ -213,11 +195,11 @@ for i, tab in enumerate(tabs):
     with tab:
         app_mode = APP_MODES[i]
 
-        # ------------------ Overview (Revisi dengan Teks Naratif dan Data) ------------------
+        # ------------------ Overview (REVISI FINAL: Teks Naratif + Semua Data Preview) ------------------
         if app_mode == "Overview":
             st.title("Selamat Datang di Dashboard Analisis Parkir UPN")
             
-            # --- Teks Naratif Awal (Membuat Menarik) ---
+            # --- 1. Teks Naratif Awal (Membuat Menarik) ---
             st.markdown("""
             <div style="background-color: #F0F8FF; padding: 25px; border-radius: 12px; border-left: 6px solid #1E90FF; margin-bottom: 25px; box-shadow: 2px 2px 8px rgba(0,0,0,0.1);">
                 <p style="font-size: 1.15em; font-weight: 500; margin-bottom: 15px; color: #1E90FF;">
@@ -238,31 +220,49 @@ for i, tab in enumerate(tabs):
             st.info(f"Total Responden yang Sedang Dianalisis Saat Ini: **{df.shape[0]:,} orang**.")
             st.markdown("---")
             
-            # 1. Preview Data
-            st.subheader("1. Struktur Data & Sampel Awal")
-            st.markdown("5 baris pertama data yang dimuat untuk memverifikasi format dan isinya.")
+            # 2. Preview Data
+            st.subheader("1. Preview Data Keseluruhan (5 Baris Pertama)")
+            st.markdown("Contoh baris data untuk memverifikasi format dan isinya.")
             st.dataframe(df.head(), use_container_width=True)
             
-            # 2. Ringkasan Tipe Data
-            st.subheader("2. Ringkasan Tipe Data")
-            st.markdown("Kolom-kolom diidentifikasi sebagai Kategori (object/text) atau Numerik (integer/float) untuk analisis Likert.")
-            st.dataframe(df.dtypes.to_frame(name='Tipe Data'), use_container_width=True)
-
+            # 3. Ringkasan Tipe Data (Lebih Jelas)
+            st.subheader("2. Ringkasan Tipe Data & Klasifikasi Analisis")
+            
+            col_tip1, col_tip2 = st.columns(2)
+            
+            with col_tip1:
+                st.markdown("#### Preview Kolom Numerik (Skor Likert / Kuantitatif)")
+                if numeric_cols:
+                    st.write(f"Total **{len(numeric_cols)}** Variabel:")
+                    # MENAMPILKAN DATA NUMERIK SECARA LANGSUNG
+                    st.dataframe(df[numeric_cols].head(5), use_container_width=True)
+                else:
+                    st.warning("Tidak ada kolom numerik (Likert) yang terdeteksi.")
+                    
+            with col_tip2:
+                st.markdown("#### Preview Kolom Kategorikal (Demografi / Kualitatif)")
+                if categorical_cols:
+                    st.write(f"Total **{len(categorical_cols)}** Variabel:")
+                    # MENAMPILKAN DATA KATEGORIKAL SECARA LANGSUNG
+                    st.dataframe(df[categorical_cols].head(5), use_container_width=True)
+                else:
+                    st.warning("Tidak ada kolom kategorikal yang terdeteksi.")
+            
             st.markdown("---")
 
-            # 3. Analisis Data Numerik
+            # 4. Analisis Data Numerik (Skor Likert)
             if len(numeric_cols) > 0:
                 st.subheader("3. Ringkasan Statistik Data Numerik (Skor Likert)")
                 col_num_1, col_num_2 = st.columns([2, 3])
                 
                 with col_num_1:
-                    st.markdown("#### Statistik Deskriptif")
+                    st.markdown("#### Statistik Deskriptif (Skala 1-5)")
                     stats = df[numeric_cols].describe().T[['count', 'mean', 'std', 'min', 'max']].sort_values(by='mean', ascending=False)
-                    # Menambahkan gradient warna untuk mean agar visual lebih menarik
+                    # Menambahkan gradient warna untuk mean
                     st.dataframe(stats.style.background_gradient(cmap='RdYlGn', subset=['mean']), use_container_width=True)
                     
                 with col_num_2:
-                    st.markdown("#### Perbandingan Rata-Rata Skor")
+                    st.markdown("#### Perbandingan Rata-Rata Skor Efektivitas")
                     mean_df = df[numeric_cols].mean().sort_values(ascending=True).to_frame(name='Rata-Rata Skor')
                     mean_df = mean_df.reset_index().rename(columns={'index': 'Variabel'})
                     fig_mean = px.bar(mean_df, x='Rata-Rata Skor', y='Variabel', orientation='h',
@@ -276,7 +276,7 @@ for i, tab in enumerate(tabs):
 
             st.markdown("---")
             
-            # 4. Analisis Data Kategori Utama (Demografi)
+            # 5. Analisis Data Kategori Utama (Demografi)
             st.subheader("4. Distribusi Data Kategori Utama (Demografi)")
             
             # Contoh Visualisasi (Fakultas)
@@ -286,11 +286,22 @@ for i, tab in enumerate(tabs):
                 fig_cat = px.pie(counts, names='Fakultas', values='count', 
                                 title=f"Proporsi Responden Berdasarkan Fakultas",
                                 color_discrete_sequence=px.colors.qualitative.Pastel,
-                                hole=.3) # Pie chart with a hole untuk visual yang lebih modern
+                                hole=.3)
+                fig_cat.update_traces(textposition='inside', textinfo='percent+label')
+                st.plotly_chart(fig_cat, use_container_width=True)
+            elif categorical_cols:
+                # Fallback to the first available categorical column
+                first_cat = categorical_cols[0]
+                counts = df[first_cat].value_counts().reset_index()
+                counts.columns = [first_cat, 'count']
+                fig_cat = px.pie(counts, names=first_cat, values='count', 
+                                title=f"Proporsi Responden Berdasarkan {first_cat}",
+                                color_discrete_sequence=px.colors.qualitative.Pastel,
+                                hole=.3)
                 fig_cat.update_traces(textposition='inside', textinfo='percent+label')
                 st.plotly_chart(fig_cat, use_container_width=True)
             else:
-                st.info("Kolom 'Fakultas' tidak ditemukan dalam data.")
+                st.info("Kolom 'Fakultas' atau kolom kategorikal utama lainnya tidak ditemukan dalam data.")
 
 
         # ------------------ Descriptive ------------------
@@ -299,14 +310,13 @@ for i, tab in enumerate(tabs):
             st.markdown("Halaman ini menampilkan statistik dasar dan distribusi data kategorikal serta numerik.")
 
             # Section 1: Demografi
-            st.header("1. Distribusi Demografi")
-            with st.expander("Pilih kolom demografis (kategorikal) untuk breakdown"):
-                cat_cols = [c for c in df.columns if df[c].dtype == 'object' or df[c].dtype.name == 'category']
-                # Remove filter columns from this selection to avoid redundancy
-                filter_cols = list(filter_cols_mapping.values())
-                cat_cols = [c for c in cat_cols if c not in filter_cols] 
+            st.header("1. Distribusi Demografi & Kategori")
+            with st.expander("Pilih kolom demografis/kategorikal untuk breakdown"):
                 
-                sel_cat = st.multiselect('Pilih kategori (mis. jenis kendaraan, angkatan)', cat_cols, default=cat_cols[:2])
+                # Exclude obvious filter columns from the selection list for visual clarity
+                sel_cat_options = [c for c in categorical_cols if c not in filter_cols_mapping.values()]
+                
+                sel_cat = st.multiselect('Pilih kategori (mis. Program Studi, Jenis Kendaraan)', sel_cat_options, default=sel_cat_options[:2])
 
             col_dem1, col_dem2 = st.columns(2)
             for i, c in enumerate(sel_cat):
@@ -316,10 +326,9 @@ for i, tab in enumerate(tabs):
                     col = col_dem2
 
                 with col:
-                    # Use Pie chart for top categories, Bar chart for detailed distribution
                     counts = df[c].value_counts().reset_index()
                     counts.columns = [c, 'count']
-                    if len(counts) <= 6:
+                    if len(counts) <= 8:
                          fig = px.pie(counts, names=c, values='count', title=f"Proporsi: {c}")
                          fig.update_traces(textposition='inside', textinfo='percent+label')
                     else:
@@ -339,7 +348,6 @@ for i, tab in enumerate(tabs):
 
                 with col_stat2:
                     st.subheader("Visualisasi Rata-Rata Skor")
-                    # Horizontal Bar Chart for mean comparison
                     mean_df = df[numeric_cols].mean().sort_values(ascending=True).to_frame(name='Rata-Rata Skor')
                     mean_df = mean_df.reset_index().rename(columns={'index': 'Variabel'})
                     fig_mean = px.bar(mean_df, x='Rata-Rata Skor', y='Variabel', orientation='h',
@@ -350,7 +358,7 @@ for i, tab in enumerate(tabs):
             else:
                 st.warning("Tidak ada kolom numerik (Likert) yang terdeteksi untuk analisis skor.")
 
-        # ------------------ Effectiveness Analysis (New Page) ------------------
+        # ------------------ Effectiveness Analysis (Analisis Kunci) ------------------
         elif app_mode == "Analisis Kunci (Efektivitas Parkir)":
             st.title("Analisis Kunci: Efektivitas Ketersediaan Lahan Parkir")
             st.markdown("Halaman ini menyajikan sintesis temuan yang secara langsung menjawab tujuan penelitian mengenai efektivitas lahan parkir.")
@@ -366,7 +374,7 @@ for i, tab in enumerate(tabs):
             col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
             with col_kpi1:
                 st.metric(label="Rata-Rata Skor Efektivitas Keseluruhan", value=f"{overall_mean:.2f}",
-                          delta=f"{(overall_mean - 3.0)*100/3:.2f}% dari skala maks (jika skala 1-5)", delta_color="normal") # Assuming 3 is neutral
+                          delta=f"{(overall_mean - 3.0)*100/3:.2f}% dari skala maks (jika skala 1-5)", delta_color="normal")
             with col_kpi2:
                 top_complaint = mean_scores.index[0]
                 st.metric(label="Poin Paling Rentan/Butuh Perbaikan", value=f"{top_complaint}", delta=f"Skor: {mean_scores.iloc[0]:.2f}", delta_color="inverse")
@@ -389,11 +397,9 @@ for i, tab in enumerate(tabs):
 
             with col_eff2:
                 st.markdown("#### Perbandingan Skor Likert Berdasarkan Demografi")
-                # Find a suitable categorical column (e.g., 'Fakultas') for breakdown
-                cat_cols = [c for c in df.columns if df[c].dtype == 'object' or df[c].dtype.name == 'category']
                 
-                if cat_cols:
-                    breakdown_col = st.selectbox("Pilih Kategori Pembanding:", options=cat_cols, index=min(len(cat_cols)-1, 0))
+                if categorical_cols:
+                    breakdown_col = st.selectbox("Pilih Kategori Pembanding:", options=categorical_cols, index=0)
                     score_col = st.selectbox("Pilih Variabel Likert:", options=numeric_cols, index=0)
 
                     grouped_mean = df.groupby(breakdown_col)[score_col].mean().sort_values(ascending=False).reset_index()
@@ -426,9 +432,6 @@ for i, tab in enumerate(tabs):
                     st.subheader("Tabel korelasi")
                     st.dataframe(corr.style.background_gradient(cmap='RdBu_r', vmin=-1, vmax=1), use_container_width=True)
 
-                    if st.checkbox("Tampilkan scatter matrix (pairwise)"):
-                        fig2 = px.scatter_matrix(df[cols_for_corr].dropna(), dimensions=cols_for_corr)
-                        st.plotly_chart(fig2, use_container_width=True)
                 else:
                     st.info("Pilih minimal 2 variabel untuk melihat korelasi.")
 
@@ -489,15 +492,16 @@ for i, tab in enumerate(tabs):
             st.title("Analisis Jawaban Essay/Open-Ended")
             st.markdown("Analisis frekuensi kata membantu merangkum keluhan, kendala, atau saran yang paling sering diungkapkan responden.")
 
-            text_cols = [c for c in df.columns if df[c].dtype == 'object']
-            sel_text = st.multiselect("Pilih kolom essay/text", text_cols, default=[c for c in text_cols if 'kendala' in c.lower() or 'solusi' in c.lower()][:1])
+            # Filter kolom teks yang mungkin adalah jawaban essay
+            essay_cols = [c for c in df.columns if df[c].dtype == 'object' and not any(kw in c.lower() for kw in ['nama', 'npm', 'timestamp', 'fakultas', 'studi'])]
+            
+            sel_text = st.multiselect("Pilih Kolom Teks (Essay/Jawaban Terbuka)", essay_cols, default=essay_cols[:1])
 
             if sel_text:
                 for c in sel_text:
                     st.header(f"Ringkasan Kata Kunci — {c}")
                     tw = top_words(df[c].astype(str), n=30)
                     
-                    # Use Plotly Bar chart for a better visual representation of frequency
                     fig = px.bar(tw.sort_values(by='count', ascending=True), x='count', y='word', orientation='h',
                                  title=f'Top 30 Kata Kunci di Kolom: {c}',
                                  color='count', color_continuous_scale=px.colors.sequential.Viridis)
@@ -519,12 +523,15 @@ for i, tab in enumerate(tabs):
                 "4. Jika terjadi error, buka Logs di Streamlit Cloud untuk melihat pesan kesalahan."
             )
 
-            st.subheader("Download sample data (jika mau)")
-            st.write("Gunakan tombol di bawah ini untuk mendownload ringkasan data sebagai CSV (hasil preprocess).")
-            # Ensure numeric_cols is up-to-date and not empty before trying to use it
-            if len(numeric_cols) > 0:
-                st.download_button("Download ringkasan numeric", df[numeric_cols].describe().to_csv().encode('utf-8'), file_name='ringkasan_numeric.csv')
-            else:
-                 st.warning("Tidak ada data numerik untuk diunduh.")
+            st.subheader("Download Data Analisis")
+            st.write("Gunakan tombol di bawah ini untuk mendownload data yang sudah terfilter sebagai CSV.")
+            
+            @st.cache_data
+            def convert_df_to_csv(df):
+                return df.to_csv(index=False).encode('utf-8')
+            
+            csv = convert_df_to_csv(df)
+            
+            st.download_button("Download Data Hasil Filter (.csv)", csv, file_name='data_filtered_parkir.csv', mime='text/csv')
 
 # EOF
