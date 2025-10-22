@@ -174,7 +174,7 @@ with col_title:
     st.markdown(f"""
     <div class="header-title">
         <h1>Dashboard Analisis Lahan Parkir</h1>
-        <h3>Keefektivan dan Ketersediaan di UPN "Veteran" Jawa Timur</h3>
+        <h3>KEEFEKTIFAN DAN KETERSEDIAAN LAHAN PARKIR DI UPN "VETERAN" JAWA TIMUR</h3>
         <h3>by SKS</h3>
         <h3>Gaitsa Nazwa Kansa (24083010014) | Auliya Khotimatuz Zahroh (24083010061) | Carissa Naura Rajwa (24083010063)</h3>
     </div>
