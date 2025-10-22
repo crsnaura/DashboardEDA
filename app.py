@@ -106,7 +106,7 @@ initial_rows = len(df_filtered)
 
 for label, col_name in filter_cols_mapping.items():
     if col_name in df_filtered.columns:
-        # Get unique, non-null sorted values for the multiselect
+        # Get unique, non-null sorted values of selected column
         options = df_filtered[col_name].dropna().unique().tolist()
         options.sort()
         
@@ -139,7 +139,7 @@ df, numeric_cols = preprocess_df(df_raw) # Re-run with original data structure, 
 # ------------------ TOP HEADER/JUDUL DASHBOARD (Meniru style rapih) ------------------
 
 # URL Logo UPN "Veteran" Jawa Timur.
-# >>> PERBAIKAN: Ganti placeholder dengan URL logo publik UPN yang sebenarnya
+# >>> PERBAIKAN: Menggunakan URL Logo UPN baru dari input user terbaru
 UPN_LOGO_URL = "https://upnjatim.ac.id/wp-content/uploads/2025/05/cropped-logo-1.png"
 # URL Logo Parkir/Ikon (menggunakan ikon mobil/parkir)
 PARKING_ICON_URL = "https://w7.pngwing.com/pngs/46/320/png-transparent-parking-car-park-others-miscellaneous-blue-text.png" # Contoh ikon mobil/parkir
@@ -184,7 +184,6 @@ col_logo_left, col_title, col_logo_right = st.columns([1, 4, 1])
 
 with col_logo_left:
     # Menggunakan ikon UPN
-    # >>> PERBAIKAN: Mengganti use_column_width=True dengan use_container_width=True
     st.image(UPN_LOGO_URL, use_container_width=True)
 
 with col_title:
@@ -194,12 +193,9 @@ with col_title:
         <h3>Keefektivan dan Ketersediaan di UPN "Veteran" Jawa Timur</h3>
     </div>
     """, unsafe_allow_html=True)
-    # Anda bisa tambahkan nama Anda di sini jika mau, seperti di contoh:
-    # st.markdown("<p style='text-align: center; font-size: 0.9em;'>Oleh: [Nama Anda] / [NPM]</p>", unsafe_allow_html=True)
 
 with col_logo_right:
     # Menggunakan ikon Parkir
-    # >>> PERBAIKAN: Mengganti use_column_width=True dengan use_container_width=True
     st.image(PARKING_ICON_URL, use_container_width=True)
 
 st.markdown("---") # Garis pemisah setelah header
@@ -217,51 +213,85 @@ for i, tab in enumerate(tabs):
     with tab:
         app_mode = APP_MODES[i]
 
-        # ------------------ Overview ------------------
+        # ------------------ Overview (Revisi dengan Teks Naratif dan Data) ------------------
         if app_mode == "Overview":
-            # --- START: Konten Khusus Overview Dashboard ---
-            # Menghapus st.title di sini karena sudah ada di header atas
+            st.title("Selamat Datang di Dashboard Analisis Parkir UPN")
             
-            # --- Teks Deskriptif Kunci ---
+            # --- Teks Naratif Awal (Membuat Menarik) ---
             st.markdown("""
-            ### Seberapa Efektif dan Tersediakah Lahan Parkir Kampus?
+            <div style="background-color: #F0F8FF; padding: 25px; border-radius: 12px; border-left: 6px solid #1E90FF; margin-bottom: 25px; box-shadow: 2px 2px 8px rgba(0,0,0,0.1);">
+                <p style="font-size: 1.15em; font-weight: 500; margin-bottom: 15px; color: #1E90FF;">
+                    <b>Eksplorasi Data Analisis (EDA) Parkir UPN "Veteran" Jawa Timur</b>
+                </p>
+                <p style="font-size: 1.0em; color: #333;">
+                    Dashboard ini didedikasikan untuk melakukan analisis mendalam terhadap hasil survei ketersediaan dan efektivitas lahan parkir. 
+                    Tujuannya adalah untuk memberikan <b>wawasan berbasis data</b> yang konkret bagi pengambilan keputusan strategis terkait 
+                    manajemen fasilitas kampus. Bagian ini menyajikan gambaran cepat mengenai struktur data dan ringkasan awal.
+                </p>
+                <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
+                    Gunakan filter di sidebar dan jelajahi tab "Analisis Kunci" untuk temuan utama.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
-            Data ini berfokus pada evaluasi mendalam terhadap kondisi lahan parkir di UPN 'Veteran' Jawa Timur, dilihat dari dua aspek utama: **Keefektivan (Pelayanan & Kenyamanan)** dan **Ketersediaan (Kapasitas & Akses)**. 
-
-            Dari total **{df.shape[0]} responden** yang disurvei, kami menemukan bahwa isu utama bukan hanya pada *jumlah* lahan, tetapi juga pada **distribusi lahan dan keamanan** saat jam sibuk. Dashboard ini menyajikan data skor Likert yang dapat menunjukkan area mana yang menjadi kekuatan (Skor Tinggi) dan mana yang menjadi kelemahan (Skor Rendah) yang memerlukan intervensi segera dari pihak kampus.
-            """.format(df=df))
+            # Menampilkan Statistik Kunci (Total Responden)
+            st.info(f"Total Responden yang Sedang Dianalisis Saat Ini: **{df.shape[0]:,} orang**.")
+            st.markdown("---")
             
+            # 1. Preview Data
+            st.subheader("1. Struktur Data & Sampel Awal")
+            st.markdown("5 baris pertama data yang dimuat untuk memverifikasi format dan isinya.")
+            st.dataframe(df.head(), use_container_width=True)
+            
+            # 2. Ringkasan Tipe Data
+            st.subheader("2. Ringkasan Tipe Data")
+            st.markdown("Kolom-kolom diidentifikasi sebagai Kategori (object/text) atau Numerik (integer/float) untuk analisis Likert.")
+            st.dataframe(df.dtypes.to_frame(name='Tipe Data'), use_container_width=True)
+
             st.markdown("---")
 
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("Tujuan Dashboard")
-                st.markdown("""
-                Dashboard ini bertujuan untuk:
-                * Menyajikan gambaran visual komprehensif mengenai tingkat kepuasan dan efektivitas lahan parkir.
-                * Mengidentifikasi variabel-variabel kunci yang paling memengaruhi persepsi ketersediaan lahan parkir.
-                * Menyediakan insight interaktif untuk eksplorasi data secara mendalam, termasuk analisis teks dari saran/keluhan responden.
-                """)
-            
-            with col2:
-                st.subheader("Deskripsi Data")
-                st.markdown(f"""
-                Dataset ini merupakan hasil survei terhadap mahasiswa UPN "Veteran" Jawa Timur.
-                * **Jumlah Responden:** {df.shape[0]:,} orang.
-                * **Variabel Kunci:** Identifikasi responden, kondisi parkir (skor Likert), dan jawaban terbuka (essay).
-                * **Analisis:** Mencakup analisis deskriptif, korelasi antar skor, model regresi, dan analisis frekuensi kata kunci.
-                """)
+            # 3. Analisis Data Numerik
+            if len(numeric_cols) > 0:
+                st.subheader("3. Ringkasan Statistik Data Numerik (Skor Likert)")
+                col_num_1, col_num_2 = st.columns([2, 3])
                 
+                with col_num_1:
+                    st.markdown("#### Statistik Deskriptif")
+                    stats = df[numeric_cols].describe().T[['count', 'mean', 'std', 'min', 'max']].sort_values(by='mean', ascending=False)
+                    # Menambahkan gradient warna untuk mean agar visual lebih menarik
+                    st.dataframe(stats.style.background_gradient(cmap='RdYlGn', subset=['mean']), use_container_width=True)
+                    
+                with col_num_2:
+                    st.markdown("#### Perbandingan Rata-Rata Skor")
+                    mean_df = df[numeric_cols].mean().sort_values(ascending=True).to_frame(name='Rata-Rata Skor')
+                    mean_df = mean_df.reset_index().rename(columns={'index': 'Variabel'})
+                    fig_mean = px.bar(mean_df, x='Rata-Rata Skor', y='Variabel', orientation='h',
+                                    color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
+                                    title="Rata-Rata Skor Likert")
+                    fig_mean.update_layout(yaxis={'categoryorder': 'total ascending'})
+                    st.plotly_chart(fig_mean, use_container_width=True)
+            else:
+                 st.subheader("3. Ringkasan Statistik Data Numerik (Skor Likert)")
+                 st.info("Tidak ada kolom numerik (Likert) yang terdeteksi untuk analisis skor.")
+
             st.markdown("---")
             
-            # --- END: Konten Khusus Overview Dashboard ---
+            # 4. Analisis Data Kategori Utama (Demografi)
+            st.subheader("4. Distribusi Data Kategori Utama (Demografi)")
+            
+            # Contoh Visualisasi (Fakultas)
+            if 'Fakultas' in df.columns:
+                counts = df['Fakultas'].value_counts().reset_index()
+                counts.columns = ['Fakultas', 'count']
+                fig_cat = px.pie(counts, names='Fakultas', values='count', 
+                                title=f"Proporsi Responden Berdasarkan Fakultas",
+                                color_discrete_sequence=px.colors.qualitative.Pastel,
+                                hole=.3) # Pie chart with a hole untuk visual yang lebih modern
+                fig_cat.update_traces(textposition='inside', textinfo='percent+label')
+                st.plotly_chart(fig_cat, use_container_width=True)
+            else:
+                st.info("Kolom 'Fakultas' tidak ditemukan dalam data.")
 
-            st.subheader("Preview data (5 baris pertama)")
-            st.dataframe(df.head())
-
-            st.subheader("Ringkasan singkat tipe data")
-            st.dataframe(df.dtypes.to_frame(name='Tipe Data'))
 
         # ------------------ Descriptive ------------------
         elif app_mode == "Deskriptif":
