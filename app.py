@@ -28,24 +28,31 @@ def preprocess_df(df: pd.DataFrame):
     df.columns = [c.strip() for c in df.columns]
 
     numeric_cols = []
+    text_cols = []
+    
     for c in df.columns:
-        try:
-            # Try to convert to numeric
-            ser = pd.to_numeric(df[c], errors='coerce')
-            # Criteria: sufficiently non-null numeric
-            if ser.notna().sum() >= max(5, int(0.3 * len(ser))):
-                numeric_cols.append(c)
-        except Exception:
-            continue
+        # 1. Try to convert to numeric
+        ser = pd.to_numeric(df[c], errors='coerce')
+        # Criteria: sufficiently non-null numeric (at least 30% or 5 values)
+        if ser.notna().sum() >= max(5, int(0.3 * len(ser))):
+            numeric_cols.append(c)
+        elif df[c].dtype == 'object' or df[c].dtype == 'O':
+            text_cols.append(c)
+
 
     # Simple conversion for numeric-like columns
     for c in numeric_cols:
         df[c] = pd.to_numeric(df[c], errors='coerce')
 
     # Identify categorical columns (excluding identifiers and timestamps)
-    categorical_cols = [c for c in df.columns if c not in numeric_cols and (df[c].dtype == 'object' or df[c].nunique() < 10)]
-    # Filter out columns that are likely identifiers or timestamps
-    identifier_keywords = ['nama', 'npm', 'timestamp']
+    # Categorical: low cardinality object columns
+    categorical_cols = [
+        c for c in text_cols 
+        if df[c].nunique() < 50 and df[c].nunique() > 1 and df[c].dtype == 'object'
+    ]
+    
+    # Filter out columns that are likely identifiers or timestamps from categories
+    identifier_keywords = ['nama', 'npm', 'timestamp', 'id', 'nim']
     categorical_cols = [c for c in categorical_cols if not any(kw in c.lower() for kw in identifier_keywords)]
 
     return df, numeric_cols, categorical_cols
@@ -76,9 +83,22 @@ def sensor_data(df: pd.DataFrame):
 @st.cache_data
 def top_words(text_series, n=30):
     indonesian_stopwords = set(['yang', 'dan', 'di', 'ke', 'dari', 'tidak', 'dengan', 'saya', 'untuk', 'pada', 'adalah', 'ini', 'itu', 'sangat', 'agar', 'bisa', 'akan', 'juga', 'dalam', 'mereka'])
+    # Convert to string and fillna before vectorizing
+    cleaned = text_series.fillna("").astype(str).str.lower() 
+    
+    # Filter out empty strings/NaNs after conversion
+    cleaned = cleaned[cleaned.str.len() > 0] 
+    
+    if cleaned.empty:
+        return pd.DataFrame({"word": [], "count": []})
+
     vec = CountVectorizer(stop_words=list(indonesian_stopwords), min_df=2)
-    cleaned = text_series.fillna("").astype(str).str.lower()
-    X = vec.fit_transform(cleaned)
+    
+    try:
+        X = vec.fit_transform(cleaned)
+    except ValueError:
+        return pd.DataFrame({"word": [], "count": []})
+        
     s = np.asarray(X.sum(axis=0)).ravel()
     terms = np.array(vec.get_feature_names_out())
     top_idx = np.argsort(s)[::-1][:n]
@@ -94,17 +114,15 @@ df = None
 load_status = st.sidebar.empty()
 
 try:
-    load_status.info(f"Memuat data dari {default_filename}...")
-    df = load_data_from_path(default_filename)
+    load_status.info(f"Memuat data dari **{default_filename}**...")
+    df_raw = load_data_from_path(default_filename)
     load_status.success("Data berhasil dimuat!")
 except Exception as e:
-    load_status.error(f"Gagal memuat data utama: {default_filename}. Pastikan file ini ada di repositori GitHub Anda. Error: {e}")
+    load_status.error(f"Gagal memuat data utama: **{default_filename}**. Pastikan file ini ada di lokasi yang dapat diakses. Error: {e}")
     st.stop()
 
-# Preprocess and Censor Data
-df_raw = df.copy()
 # 1. Preprocess raw data to identify columns
-df, numeric_cols, categorical_cols = preprocess_df(df_raw)
+df, numeric_cols, categorical_cols = preprocess_df(df_raw.copy()) # Use a copy for safe preprocessing
 # 2. Apply sensoring globally to the main analysis DataFrame.
 df = sensor_data(df)
 
@@ -115,11 +133,12 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Filter Data Global")
 
 # List of columns to be used as filters
-filter_cols_mapping = {
-    "Fakultas": "Fakultas",
-    "Program Studi": "Program Studi"
-    # Other filter columns can be added here if needed
-}
+# NOTE: Using a dictionary to ensure the filtering columns exist in the DataFrame
+filter_cols_mapping = {}
+for label, col_name in {"Fakultas": "Fakultas", "Program Studi": "Program Studi"}.items():
+    if col_name in df.columns:
+        # Only add filter if the column exists
+        filter_cols_mapping[label] = col_name
 
 # --- Apply Filters ---
 df_filtered = df.copy() # df_filtered starts as the globally censored dataframe
@@ -130,12 +149,14 @@ for label, col_name in filter_cols_mapping.items():
         options = df_filtered[col_name].dropna().unique().tolist()
         options.sort()
         
-        # NOTE: The problematic sensoring code lines were removed from here.
+        # NOTE: The filter must be built using the actual values present in the data. 
+        # Since 'Fakultas' and 'Program Studi' are NOT censored, we use their original values for filtering.
         
         selected_values = st.sidebar.multiselect(
             f"Pilih {label}:",
             options=options,
-            default=options
+            default=options,
+            key=f"filter_{col_name}" # Added key for better Streamlit stability
         )
         
         if selected_values:
@@ -149,7 +170,8 @@ st.sidebar.info(f"Data tersaring: {final_rows} dari {initial_rows} baris.")
 
 if final_rows == 0:
     st.error("Semua data terfilter habis. Sesuaikan pilihan filter Anda.")
-    st.stop()
+    # Show a message and stop execution until filters are adjusted
+    st.stop() 
     
 # Re-run preprocess on the filtered data to update numeric/categorical lists based on subset
 # This is mainly to update counts, but we use the existing lists for consistency since types haven't changed.
@@ -303,8 +325,8 @@ for i, tab in enumerate(tabs):
                     mean_df = df[numeric_cols].mean().sort_values(ascending=True).to_frame(name='Rata-Rata Skor')
                     mean_df = mean_df.reset_index().rename(columns={'index': 'Variabel'})
                     fig_mean = px.bar(mean_df, x='Rata-Rata Skor', y='Variabel', orientation='h',
-                                      color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
-                                      title="Rata-Rata Skor Likert")
+                                     color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
+                                     title="Rata-Rata Skor Likert")
                     fig_mean.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig_mean, use_container_width=True)
             else:
@@ -317,22 +339,13 @@ for i, tab in enumerate(tabs):
             st.subheader("🫡Distribusi Data Kategori Utama (Demografi)")
             
             # Contoh Visualisasi (Fakultas)
-            if 'Fakultas' in df.columns:
-                counts = df['Fakultas'].value_counts().reset_index()
-                counts.columns = ['Fakultas', 'count']
-                fig_cat = px.pie(counts, names='Fakultas', values='count', 
-                                 title=f"Proporsi Responden Berdasarkan Fakultas",
-                                 color_discrete_sequence=px.colors.qualitative.Pastel,
-                                 hole=.3)
-                fig_cat.update_traces(textposition='inside', textinfo='percent+label')
-                st.plotly_chart(fig_cat, use_container_width=True)
-            elif categorical_cols:
-                # Fallback to the first available categorical column
-                first_cat = categorical_cols[0]
-                counts = df[first_cat].value_counts().reset_index()
-                counts.columns = [first_cat, 'count']
-                fig_cat = px.pie(counts, names=first_cat, values='count', 
-                                 title=f"Proporsi Responden Berdasarkan {first_cat}",
+            target_col = 'Fakultas' if 'Fakultas' in df.columns else (categorical_cols[0] if categorical_cols else None)
+            
+            if target_col:
+                counts = df[target_col].value_counts().reset_index()
+                counts.columns = [target_col, 'count']
+                fig_cat = px.pie(counts, names=target_col, values='count', 
+                                 title=f"Proporsi Responden Berdasarkan {target_col}",
                                  color_discrete_sequence=px.colors.qualitative.Pastel,
                                  hole=.3)
                 fig_cat.update_traces(textposition='inside', textinfo='percent+label')
@@ -348,30 +361,37 @@ for i, tab in enumerate(tabs):
 
             # Section 1: Demografi
             st.header("🫨Distribusi Demografi & Kategori")
+            
+            # Get safe categorical columns, excluding the ones already used for global filtering
+            global_filter_cols = list(filter_cols_mapping.values())
+            safe_categorical_cols = [c for c in categorical_cols if c not in global_filter_cols]
+
             with st.expander("Pilih kolom demografis/kategorikal untuk breakdown"):
-                
-                # Exclude obvious filter columns from the selection list for visual clarity
-                sel_cat_options = [c for c in categorical_cols if c not in filter_cols_mapping.values()]
-                
-                sel_cat = st.multiselect('Pilih kategori (mis. Program Studi, Jenis Kendaraan)', sel_cat_options, default=sel_cat_options[:2])
+                sel_cat = st.multiselect('Pilih kategori (mis. Jenis Kendaraan, Tingkat)', safe_categorical_cols, default=safe_categorical_cols[:2])
 
-            col_dem1, col_dem2 = st.columns(2)
-            for i, c in enumerate(sel_cat):
-                if i % 2 == 0:
-                    col = col_dem1
-                else:
-                    col = col_dem2
-
-                with col:
-                    counts = df[c].value_counts().reset_index()
-                    counts.columns = [c, 'count']
-                    if len(counts) <= 8:
-                        fig = px.pie(counts, names=c, values='count', title=f"Proporsi: {c}")
-                        fig.update_traces(textposition='inside', textinfo='percent+label')
+            if sel_cat:
+                col_dem1, col_dem2 = st.columns(2)
+                for i, c in enumerate(sel_cat):
+                    if i % 2 == 0:
+                        col = col_dem1
                     else:
-                        fig = px.bar(counts.head(10), x=c, y='count', title=f"Top 10 Distribusi: {c}")
+                        col = col_dem2
 
-                    st.plotly_chart(fig, use_container_width=True)
+                    with col:
+                        counts = df[c].value_counts().reset_index()
+                        counts.columns = [c, 'count']
+                        if len(counts) <= 8 and len(counts) > 0:
+                            fig = px.pie(counts, names=c, values='count', title=f"Proporsi: {c}")
+                            fig.update_traces(textposition='inside', textinfo='percent+label')
+                        elif len(counts) > 0:
+                            fig = px.bar(counts.head(10), x=c, y='count', title=f"Top 10 Distribusi: {c}")
+                        else:
+                            st.info(f"Tidak ada data di kolom {c} setelah filter.")
+                            continue
+
+                        st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Tidak ada kolom kategorikal yang dipilih atau ditemukan.")
 
 
             # Section 2: Analisis Skor Likert
@@ -388,8 +408,8 @@ for i, tab in enumerate(tabs):
                     mean_df = df[numeric_cols].mean().sort_values(ascending=True).to_frame(name='Rata-Rata Skor')
                     mean_df = mean_df.reset_index().rename(columns={'index': 'Variabel'})
                     fig_mean = px.bar(mean_df, x='Rata-Rata Skor', y='Variabel', orientation='h',
-                                         color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
-                                         title="Perbandingan Rata-Rata Skor Likert")
+                                     color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
+                                     title="Perbandingan Rata-Rata Skor Likert")
                     fig_mean.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig_mean, use_container_width=True)
             else:
@@ -400,18 +420,20 @@ for i, tab in enumerate(tabs):
             st.title("Analisis Kunci: Efektivitas Ketersediaan Lahan Parkir")
             st.markdown("Halaman ini menyajikan sintesis temuan yang secara langsung menjawab tujuan penelitian mengenai efektivitas lahan parkir.")
 
-            if len(numeric_cols) < 2:
+            if len(numeric_cols) < 1:
                 st.warning("Data numerik tidak memadai. Pastikan Anda meng-upload data survei yang mengandung skor Likert.")
                 st.stop()
-
-            # Calculate key metrics
-            mean_scores = df[numeric_cols].mean().sort_values()
+            
+            # --- Perhitungan KPI ---
+            mean_scores = df[numeric_cols].mean().sort_values(ascending=True) # Sort ascending for metrics
             overall_mean = mean_scores.mean()
 
             col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
             with col_kpi1:
+                # Assuming max scale is 5.0
                 st.metric(label="Rata-Rata Skor Efektivitas Keseluruhan", value=f"{overall_mean:.2f}",
-                             delta=f"{(overall_mean - 3.0)*100/3:.2f}% dari skala maks (jika skala 1-5)", delta_color="normal")
+                         delta=f"{(overall_mean - 3.0):.2f} (di atas netral 3.0)", 
+                         delta_color="normal" if overall_mean >= 3.0 else "inverse")
             with col_kpi2:
                 top_complaint = mean_scores.index[0]
                 st.metric(label="Poin Paling Rentan/Butuh Perbaikan", value=f"{top_complaint}", delta=f"Skor: {mean_scores.iloc[0]:.2f}", delta_color="inverse")
@@ -428,31 +450,28 @@ for i, tab in enumerate(tabs):
                 st.markdown("#### 3 Poin Kritis (Skor Terendah)")
                 critical_df = mean_scores.head(3).to_frame(name='Skor Rata-Rata')
                 fig_critical = px.bar(critical_df, x='Skor Rata-Rata', y=critical_df.index, orientation='h',
-                                         color='Skor Rata-Rata', color_continuous_scale=px.colors.sequential.Reds,
-                                         title="Aspek dengan Efektivitas Terendah")
+                                     color='Skor Rata-Rata', color_continuous_scale=px.colors.sequential.Reds,
+                                     title="Aspek dengan Efektivitas Terendah")
                 st.plotly_chart(fig_critical, use_container_width=True)
 
             with col_eff2:
                 st.markdown("#### Perbandingan Skor Likert Berdasarkan Demografi")
                 
-                if categorical_cols:
-                    # Filter out columns that are likely censored identifiers from the dropdown
-                    censor_keywords = ['nama', 'npm', 'id', 'nim', 'timestamp']
-                    safe_categorical_cols = [c for c in categorical_cols if not any(kw in c.lower() for kw in censor_keywords)]
-                    
-                    if safe_categorical_cols:
-                        breakdown_col = st.selectbox("Pilih Kategori Pembanding:", options=safe_categorical_cols, index=0)
-                        score_col = st.selectbox("Pilih Variabel Likert:", options=numeric_cols, index=0)
+                # Filter out columns that are likely censored identifiers from the dropdown
+                censor_keywords = ['nama', 'npm', 'id', 'nim', 'timestamp']
+                safe_categorical_cols = [c for c in categorical_cols if not any(kw in c.lower() for kw in censor_keywords)]
+                
+                if safe_categorical_cols and numeric_cols:
+                    breakdown_col = st.selectbox("Pilih Kategori Pembanding:", options=safe_categorical_cols, index=0)
+                    score_col = st.selectbox("Pilih Variabel Likert:", options=numeric_cols, index=0)
     
-                        grouped_mean = df.groupby(breakdown_col)[score_col].mean().sort_values(ascending=False).reset_index()
-                        fig_breakdown = px.bar(grouped_mean, x=breakdown_col, y=score_col,
-                                                 title=f"Skor {score_col} Berdasarkan {breakdown_col}",
-                                                 color=score_col, color_continuous_scale=px.colors.sequential.Bluyl)
-                        st.plotly_chart(fig_breakdown, use_container_width=True)
-                    else:
-                        st.info("Tidak ada kolom kategorikal yang aman untuk perbandingan demografi.")
+                    grouped_mean = df.groupby(breakdown_col)[score_col].mean().sort_values(ascending=False).reset_index()
+                    fig_breakdown = px.bar(grouped_mean, x=breakdown_col, y=score_col,
+                                             title=f"Skor {score_col} Berdasarkan {breakdown_col}",
+                                             color=score_col, color_continuous_scale=px.colors.sequential.Bluyl)
+                    st.plotly_chart(fig_breakdown, use_container_width=True)
                 else:
-                    st.info("Tidak ada kolom kategorikal yang terdeteksi untuk perbandingan demografi.")
+                    st.info("Tidak ada kolom kategorikal yang aman atau kolom numerik yang terdeteksi untuk perbandingan demografi.")
 
             st.markdown("---")
             st.subheader("Kesimpulan Analisis Efektivitas Ketersediaan")
@@ -466,7 +485,10 @@ for i, tab in enumerate(tabs):
             if len(numeric_cols) < 2:
                 st.warning("Tidak cukup variabel numerik untuk analisis korelasi.")
             else:
-                cols_for_corr = st.multiselect("Pilih variabel numerik untuk korelasi", numeric_cols, default=numeric_cols[:8])
+                # Limit the default display for visual clarity in the sidebar (optional)
+                default_cols = [c for c in numeric_cols if df[c].nunique() > 1]
+                cols_for_corr = st.multiselect("Pilih variabel numerik untuk korelasi", numeric_cols, default=default_cols[:8])
+                
                 if len(cols_for_corr) >= 2:
                     corr = df[cols_for_corr].corr()
                     fig = px.imshow(corr, text_auto=".2f", title='Matriks Korelasi (Pearson)',
@@ -483,17 +505,28 @@ for i, tab in enumerate(tabs):
         elif app_mode == "📈Regresi Linear Berganda":
             st.title("🤗Regresi Linear Berganda🤗")
             st.markdown("Pilih satu variabel dependen (Y, misal: 'Kepuasan Overall') dan beberapa variabel independen (X) numerik. Ini berguna untuk memprediksi variabel Y dari kombinasi variabel X.")
+            
+            # Filter out numeric columns that might be single valued after filter (to prevent errors)
+            valid_numeric_cols = [c for c in numeric_cols if df[c].nunique() > 1 and df[c].notna().sum() > 10]
 
-            if len(numeric_cols) < 2:
-                st.warning("Tidak cukup variabel numerik untuk regresi.")
+            if len(valid_numeric_cols) < 2:
+                st.warning("Tidak cukup variabel numerik dengan variasi data yang memadai untuk regresi (min. 2 variabel dengan >1 nilai unik).")
             else:
-                dep = st.selectbox("Pilih variabel dependen (Y)", options=numeric_cols)
-                indep = st.multiselect("Pilih variabel independen (X) — minimal 1", options=[c for c in numeric_cols if c!=dep])
+                dep = st.selectbox("Pilih variabel dependen (Y)", options=valid_numeric_cols)
+                indep_candidates = [c for c in valid_numeric_cols if c!=dep]
+                indep = st.multiselect("Pilih variabel independen (X) — minimal 1", options=indep_candidates, default=indep_candidates[:min(3, len(indep_candidates))])
                 test_size = st.slider("Proporsi data test", 0.1, 0.5, 0.25)
 
                 if len(indep) >= 1:
-                    # Prepare data
-                    sub = df[[dep] + indep].dropna()
+                    # Prepare data: use .copy() to prevent SettingWithCopyWarning
+                    sub = df[[dep] + indep].dropna().copy()
+                    
+                    if len(sub) < 20: # Ensure enough rows for splitting
+                         st.warning(f"Hanya ada {len(sub)} baris data yang lengkap untuk regresi. Disarankan lebih dari 20 baris.")
+                         if len(sub) < 5:
+                             st.error("Data terlalu sedikit untuk regresi.")
+                             st.stop()
+
                     X = sub[indep].values
                     y = sub[dep].values
 
@@ -518,14 +551,21 @@ for i, tab in enumerate(tabs):
                     # statsmodels OLS for summary table
                     if st.checkbox("Tampilkan Ringkasan Statistik Penuh (statsmodels OLS)"):
                         X_const = sm.add_constant(sub[indep])
-                        model = sm.OLS(sub[dep], X_const, missing='drop').fit()
-                        # Use st.text or st.code for the pre-formatted summary
-                        st.code(model.summary().as_text())
+                        try:
+                             model = sm.OLS(sub[dep], X_const, missing='drop').fit()
+                             # Use st.text or st.code for the pre-formatted summary
+                             st.code(model.summary().as_text())
+                        except np.linalg.LinAlgError:
+                             st.error("Gagal menjalankan OLS. Coba kurangi variabel independen karena kemungkinan terjadi multikolinearitas sempurna.")
+                        except ValueError as ve:
+                             st.error(f"Gagal menjalankan OLS. Error: {ve}")
+
 
                     # Plot actual vs predicted
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(y=y_test, mode='markers', name='Actual', marker={'opacity': 0.7}))
                     fig.add_trace(go.Scatter(y=y_pred, mode='markers', name='Predicted', marker={'opacity': 0.7}))
+                    fig.add_trace(go.Scatter(x=[min(y_test), max(y_test)], y=[min(y_test), max(y_test)], mode='lines', name='Ideal Fit', line={'dash': 'dash', 'color': 'red'}))
                     fig.update_layout(title='Actual vs Predicted (Test Set)', xaxis_title='Index Observasi', yaxis_title=dep)
                     st.plotly_chart(fig, use_container_width=True)
 
@@ -538,23 +578,30 @@ for i, tab in enumerate(tabs):
             st.markdown("Analisis frekuensi kata membantu merangkum keluhan, kendala, atau saran yang paling sering diungkapkan responden.")
 
             # Filter kolom teks yang mungkin adalah jawaban essay
-            essay_cols = [c for c in df.columns if df[c].dtype == 'object' and not any(kw in c.lower() for kw in ['nama', 'npm', 'timestamp', 'fakultas', 'studi', 'censored'])]
+            essay_cols = [c for c in df.columns if df[c].dtype == 'object' and df[c].nunique() > 50 and not any(kw in c.lower() for kw in ['nama', 'npm', 'timestamp', 'fakultas', 'studi', 'censored'])]
             
             sel_text = st.multiselect("Pilih Kolom Teks (Essay/Jawaban Terbuka)", essay_cols, default=essay_cols[:1])
 
             if sel_text:
                 for c in sel_text:
                     st.header(f"Ringkasan Kata Kunci — {c}")
-                    tw = top_words(df[c].astype(str), n=30)
+                    tw = top_words(df[c], n=30)
                     
-                    fig = px.bar(tw.sort_values(by='count', ascending=True), x='count', y='word', orientation='h',
+                    if not tw.empty:
+                        fig = px.bar(tw.sort_values(by='count', ascending=True), x='count', y='word', orientation='h',
                                      title=f'Top 30 Kata Kunci di Kolom: {c}',
                                      color='count', color_continuous_scale=px.colors.sequential.Viridis)
-                    fig.update_layout(yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig, use_container_width=True)
+                        fig.update_layout(yaxis={'categoryorder': 'total ascending'})
+                        st.plotly_chart(fig, use_container_width=True)
 
-                    st.subheader("Contoh Jawaban Acak (5 baris)")
-                    st.dataframe(df[c].dropna().sample(min(5, df[c].dropna().shape[0])).to_frame(name=c), use_container_width=True)
+                        st.subheader("Contoh Jawaban Acak (5 baris)")
+                        valid_answers = df[c].dropna().astype(str).loc[df[c].astype(str).str.len() > 10]
+                        if not valid_answers.empty:
+                            st.dataframe(valid_answers.sample(min(5, valid_answers.shape[0])).to_frame(name=c), use_container_width=True)
+                        else:
+                            st.info("Tidak ada jawaban tekstual yang cukup panjang setelah filter.")
+                    else:
+                        st.info(f"Tidak ada kata kunci yang cukup sering muncul (min. 2 kali) di kolom: {c} setelah filter.")
             else:
                 st.info("Pilih minimal satu kolom teks untuk dianalisis.")
 
