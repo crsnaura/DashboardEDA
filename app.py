@@ -136,6 +136,72 @@ if final_rows == 0:
 df, numeric_cols = preprocess_df(df_raw) # Re-run with original data structure, then use df_filtered
 # Since df is now df_filtered, we re-run preprocess on the original df_raw only to get ALL numeric columns consistently.
 
+# ------------------ TOP HEADER/JUDUL DASHBOARD (Meniru style rapih) ------------------
+
+# URL Logo UPN "Veteran" Jawa Timur. Menggunakan placeholder karena URL logo spesifik tidak disediakan.
+# Ganti URL ini dengan URL logo UPN yang sebenarnya (pastikan bisa diakses publik)
+UPN_LOGO_URL = "https://placehold.co/100x100/1E90FF/FFFFFF/png?text=Logo+UPN"
+# URL Logo Parkir/Ikon (misalnya ikon mobil)
+PARKING_ICON_URL = "https://placehold.co/100x100/FFD700/000000/png?text=%23Parkir"
+
+st.markdown("""
+    <style>
+    /* Mengatur tata letak Judul Utama agar rapi dan terpusat */
+    .dashboard-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 0;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #333333; /* Garis pemisah */
+    }
+    .header-title {
+        text-align: center;
+        flex-grow: 1;
+    }
+    .header-title h1 {
+        font-size: 2.5em;
+        font-weight: 700;
+        margin: 0;
+        color: #1E90FF; /* Warna biru UPN */
+    }
+    .header-title h3 {
+        font-size: 1.2em;
+        font-weight: 400;
+        color: #AAAAAA;
+        margin-top: 5px;
+    }
+    .header-logo {
+        width: 100px; /* Ukuran logo */
+        height: 100px;
+        object-fit: contain;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Membuat tata letak header menggunakan st.columns dan HTML/CSS kustom
+col_logo_left, col_title, col_logo_right = st.columns([1, 4, 1])
+
+with col_logo_left:
+    # Menggunakan ikon UPN
+    st.image(UPN_LOGO_URL, use_column_width=True)
+
+with col_title:
+    st.markdown(f"""
+    <div class="header-title">
+        <h1>Dashboard Analisis Lahan Parkir</h1>
+        <h3>Keefektivan dan Ketersediaan di UPN "Veteran" Jawa Timur</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    # Anda bisa tambahkan nama Anda di sini jika mau, seperti di contoh:
+    # st.markdown("<p style='text-align: center; font-size: 0.9em;'>Oleh: [Nama Anda] / [NPM]</p>", unsafe_allow_html=True)
+
+with col_logo_right:
+    # Menggunakan ikon Parkir
+    st.image(PARKING_ICON_URL, use_column_width=True)
+
+st.markdown("---") # Garis pemisah setelah header
+
 # ------------------ Navigation Tabs (UNCHANGED) ------------------
 
 # Define all app modes (pages)
@@ -151,13 +217,43 @@ for i, tab in enumerate(tabs):
 
         # ------------------ Overview ------------------
         if app_mode == "Overview":
-            st.title("Overview — Dashboard Analisis Parkir")
-            st.markdown("**Deskripsi singkat:** Dashboard ini menampilkan analisis eksploratif data survei preferensi dan kondisi lahan parkir di kampus UPN 'Veteran' Jawa Timur. \nFokus utama adalah pada **efektivitas ketersediaan dan pelayanan**. Gunakan tab di atas untuk pindah halaman.\n")
+            # --- START: Konten Khusus Overview Dashboard ---
+            # Menghapus st.title di sini karena sudah ada di header atas
             
-            st.subheader("Informasi dataset")
-            st.write(f"Jumlah baris: **{df.shape[0]:,}** — Jumlah kolom: **{df.shape[1]:,}**")
-            st.write("Daftar kolom:")
-            st.dataframe(pd.DataFrame({'kolom': df.columns}))
+            # --- Teks Deskriptif Kunci ---
+            st.markdown("""
+            ### Seberapa Efektif dan Tersediakah Lahan Parkir Kampus?
+
+            Data ini berfokus pada evaluasi mendalam terhadap kondisi lahan parkir di UPN 'Veteran' Jawa Timur, dilihat dari dua aspek utama: **Keefektivan (Pelayanan & Kenyamanan)** dan **Ketersediaan (Kapasitas & Akses)**. 
+
+            Dari total **{df.shape[0]} responden** yang disurvei, kami menemukan bahwa isu utama bukan hanya pada *jumlah* lahan, tetapi juga pada **distribusi lahan dan keamanan** saat jam sibuk. Dashboard ini menyajikan data skor Likert yang dapat menunjukkan area mana yang menjadi kekuatan (Skor Tinggi) dan mana yang menjadi kelemahan (Skor Rendah) yang memerlukan intervensi segera dari pihak kampus.
+            """.format(df=df))
+            
+            st.markdown("---")
+
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Tujuan Dashboard")
+                st.markdown("""
+                Dashboard ini bertujuan untuk:
+                * Menyajikan gambaran visual komprehensif mengenai tingkat kepuasan dan efektivitas lahan parkir.
+                * Mengidentifikasi variabel-variabel kunci yang paling memengaruhi persepsi ketersediaan lahan parkir.
+                * Menyediakan insight interaktif untuk eksplorasi data secara mendalam, termasuk analisis teks dari saran/keluhan responden.
+                """)
+            
+            with col2:
+                st.subheader("Deskripsi Data")
+                st.markdown(f"""
+                Dataset ini merupakan hasil survei terhadap mahasiswa UPN "Veteran" Jawa Timur.
+                * **Jumlah Responden:** {df.shape[0]:,} orang.
+                * **Variabel Kunci:** Identifikasi responden, kondisi parkir (skor Likert), dan jawaban terbuka (essay).
+                * **Analisis:** Mencakup analisis deskriptif, korelasi antar skor, model regresi, dan analisis frekuensi kata kunci.
+                """)
+                
+            st.markdown("---")
+            
+            # --- END: Konten Khusus Overview Dashboard ---
 
             st.subheader("Preview data (5 baris pertama)")
             st.dataframe(df.head())
