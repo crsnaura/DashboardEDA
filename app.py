@@ -1,6 +1,3 @@
-# Streamlit dashboard untuk Analisis Eksploratif: Parkir UPN "Veteran" Jawa Timur
-# Template interaktif & modern — siap di-deploy ke Streamlit Cloud
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -28,15 +25,15 @@ def load_data_from_path(path: str):
 
 def preprocess_df(df: pd.DataFrame):
     df = df.copy()
-    # Standardize column names: strip and lower
+    # Standardize column names: strip
     df.columns = [c.strip() for c in df.columns]
 
-    # Try to detect Likert numeric columns: those that contain only integers 1-5 or convertible
     numeric_cols = []
     for c in df.columns:
         try:
+            # Try to convert to numeric
             ser = pd.to_numeric(df[c], errors='coerce')
-            # consider numeric if more than half non-null numeric and values inside 1-5 for Likert
+            # Criteria: sufficiently non-null numeric
             if ser.notna().sum() >= max(5, int(0.3 * len(ser))):
                 numeric_cols.append(c)
         except Exception:
@@ -51,8 +48,12 @@ def preprocess_df(df: pd.DataFrame):
 
 @st.cache_data
 def top_words(text_series, n=30):
-    vec = CountVectorizer(stop_words='english')
-    cleaned = text_series.fillna("").astype(str)
+    # Using Indonesian stopwords list for better relevance
+    # Note: 'english' stop_words was used in the original code, switching to a basic Indonesian list
+    # If the user's essay is in English, this needs adjustment, but assuming Indonesian.
+    indonesian_stopwords = set(['yang', 'dan', 'di', 'ke', 'dari', 'tidak', 'dengan', 'saya', 'untuk', 'pada', 'adalah', 'ini', 'itu', 'sangat', 'agar', 'bisa', 'akan'])
+    vec = CountVectorizer(stop_words=list(indonesian_stopwords), min_df=2)
+    cleaned = text_series.fillna("").astype(str).str.lower()
     X = vec.fit_transform(cleaned)
     s = np.asarray(X.sum(axis=0)).ravel()
     terms = np.array(vec.get_feature_names_out())
@@ -62,7 +63,8 @@ def top_words(text_series, n=30):
 
 # ---------- Layout ----------
 st.sidebar.title("Kontrol Dashboard")
-app_mode = st.sidebar.selectbox("Pilih Halaman:", ["Overview", "Deskriptif", "Korelasi", "Regresi Linear Berganda", "Teks (essay)", "Download & Petunjuk"]) 
+# ADDED NEW PAGE: "Analisis Kunci (Efektivitas Parkir)"
+app_mode = st.sidebar.selectbox("Pilih Halaman:", ["Overview", "Deskriptif", "Analisis Kunci (Efektivitas Parkir)", "Korelasi", "Regresi Linear Berganda", "Teks (essay)", "Download & Petunjuk"])
 
 # Upload / load data
 st.sidebar.markdown("---")
@@ -73,19 +75,20 @@ use_example = st.sidebar.checkbox("Gunakan file contoh: Responden.xlsx (jika ada
 # default filename to try (when deploying, pastikan file ada di repo)
 default_filename = "Responden.xlsx"
 
+df = None
+
 if uploaded is not None:
     try:
-        df = load_data_from_path(uploaded.name)  # Note: streamlit passes a file-like object; load_data handles paths
-        uploaded.seek(0)
+        # Streamlit requires reading directly from the uploaded file object
         df = pd.read_excel(uploaded) if uploaded.name.lower().endswith(('xls','xlsx')) else pd.read_csv(uploaded)
-    except Exception:
-        st.error("Gagal memuat file yang diupload. Pastikan format .xlsx atau .csv dan kolom rapi.")
+    except Exception as e:
+        st.error(f"Gagal memuat file yang diupload. Pastikan format .xlsx atau .csv dan kolom rapi. Error: {e}")
         st.stop()
 
 elif use_example:
     try:
         df = load_data_from_path(default_filename)
-    except Exception:
+    except Exception as e:
         st.error(f"Tidak menemukan {default_filename} di repo. Upload file lewat sidebar atau pastikan nama file benar.")
         st.stop()
 else:
@@ -99,8 +102,8 @@ df, numeric_cols = preprocess_df(df_raw)
 # ------------------ Overview ------------------
 if app_mode == "Overview":
     st.title("Overview — Dashboard Analisis Parkir")
-    st.markdown("**Deskripsi singkat:** Dashboard ini menampilkan analisis eksploratif data survei preferensi dan kondisi lahan parkir di kampus UPN 'Veteran' Jawa Timur. \nGunakan sidebar untuk pindah halaman dan meng-upload dataset kamu.\n")
-
+    st.markdown("**Deskripsi singkat:** Dashboard ini menampilkan analisis eksploratif data survei preferensi dan kondisi lahan parkir di kampus UPN 'Veteran' Jawa Timur. \nFokus utama adalah pada **efektivitas ketersediaan dan pelayanan**. Gunakan sidebar untuk pindah halaman.\n")
+    
     st.subheader("Informasi dataset")
     st.write(f"Jumlah baris: **{df.shape[0]:,}** — Jumlah kolom: **{df.shape[1]:,}**")
     st.write("Daftar kolom:")
@@ -110,43 +113,122 @@ if app_mode == "Overview":
     st.dataframe(df.head())
 
     st.subheader("Ringkasan singkat tipe data")
-    st.write(df.dtypes)
+    st.dataframe(df.dtypes.to_frame(name='Tipe Data'))
 
 # ------------------ Descriptive ------------------
 elif app_mode == "Deskriptif":
-    st.title("Analisis Deskriptif")
+    st.title("Analisis Deskriptif & Visualisasi Variatif")
+    st.markdown("Halaman ini menampilkan statistik dasar dan distribusi data kategorikal serta numerik.")
 
-    with st.expander("Pilih kolom demografis untuk breakdown"):
+    # Section 1: Demografi
+    st.header("1. Distribusi Demografi")
+    with st.expander("Pilih kolom demografis (kategorikal) untuk breakdown"):
         cat_cols = [c for c in df.columns if df[c].dtype == 'object' or df[c].dtype.name == 'category']
         sel_cat = st.multiselect('Pilih kategori (mis. fakultas, program studi, kendaraan)', cat_cols, default=cat_cols[:2])
 
-    col1, col2 = st.columns([2,1])
-    with col1:
-        st.subheader("Distribusi kategori")
-        for c in sel_cat:
-            fig = px.histogram(df, x=c, title=f"Distribusi: {c}", marginal='box')
+    col_dem1, col_dem2 = st.columns(2)
+    for i, c in enumerate(sel_cat):
+        if i % 2 == 0:
+            col = col_dem1
+        else:
+            col = col_dem2
+
+        with col:
+            # Use Pie chart for top categories, Bar chart for detailed distribution
+            counts = df[c].value_counts().reset_index()
+            counts.columns = [c, 'count']
+            if len(counts) <= 6:
+                 fig = px.pie(counts, names=c, values='count', title=f"Proporsi: {c}")
+                 fig.update_traces(textposition='inside', textinfo='percent+label')
+            else:
+                 fig = px.bar(counts.head(10), x=c, y='count', title=f"Top 10 Distribusi: {c}")
+
             st.plotly_chart(fig, use_container_width=True)
 
-    with col2:
-        st.subheader("Statistik numerik (Kolom Likert)")
-        if len(numeric_cols)>0:
-            stats = df[numeric_cols].describe().T
-            st.dataframe(stats)
-        else:
-            st.write("Tidak ada kolom numerik yang terdeteksi.")
 
-    st.subheader("Jenis kendaraan")
-    if 'Kendaraan apa yang biasanya Anda gunakan untuk ke kampus?' in df.columns:
-        colname = 'Kendaraan apa yang biasanya Anda gunakan untuk ke kampus?'
-        fig = px.pie(df, names=colname, title='Proporsi jenis kendaraan')
-        st.plotly_chart(fig, use_container_width=True)
+    # Section 2: Analisis Skor Likert
+    st.header("2. Statistik & Perbandingan Skor Likert (Numerik)")
+    if len(numeric_cols)>0:
+        col_stat1, col_stat2 = st.columns([1, 2])
+        with col_stat1:
+            st.subheader("Ringkasan Skor")
+            stats = df[numeric_cols].describe().T[['count', 'mean', 'std', 'min', 'max']].sort_values(by='mean', ascending=False)
+            st.dataframe(stats.style.background_gradient(cmap='RdYlGn', subset=['mean']), use_container_width=True)
+
+        with col_stat2:
+            st.subheader("Visualisasi Rata-Rata Skor")
+            # Horizontal Bar Chart for mean comparison
+            mean_df = df[numeric_cols].mean().sort_values(ascending=True).to_frame(name='Rata-Rata Skor')
+            mean_df = mean_df.reset_index().rename(columns={'index': 'Variabel'})
+            fig_mean = px.bar(mean_df, x='Rata-Rata Skor', y='Variabel', orientation='h',
+                              color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
+                              title="Perbandingan Rata-Rata Skor Likert")
+            fig_mean.update_layout(yaxis={'categoryorder': 'total ascending'})
+            st.plotly_chart(fig_mean, use_container_width=True)
     else:
-        st.info('Kolom jenis kendaraan tidak ditemukan dengan nama persis. Pilih di sidebar Deskriptif.')
+        st.warning("Tidak ada kolom numerik (Likert) yang terdeteksi untuk analisis skor.")
+
+# ------------------ Effectiveness Analysis (New Page) ------------------
+elif app_mode == "Analisis Kunci (Efektivitas Parkir)":
+    st.title("Analisis Kunci: Efektivitas Ketersediaan Lahan Parkir")
+    st.markdown("Halaman ini menyajikan sintesis temuan yang secara langsung menjawab tujuan penelitian mengenai efektivitas lahan parkir.")
+
+    if len(numeric_cols) < 2:
+         st.warning("Data numerik tidak memadai. Pastikan Anda meng-upload data survei yang mengandung skor Likert.")
+         st.stop()
+
+    # Calculate key metrics
+    mean_scores = df[numeric_cols].mean().sort_values()
+    overall_mean = mean_scores.mean()
+
+    col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
+    with col_kpi1:
+        st.metric(label="Rata-Rata Skor Efektivitas Keseluruhan", value=f"{overall_mean:.2f}",
+                  delta=f"{(overall_mean - 3.0)*100/3:.2f}% dari skala maks (jika skala 1-5)") # Assuming 3 is neutral
+    with col_kpi2:
+        top_complaint = mean_scores.index[0]
+        st.metric(label="Poin Paling Rentan/Butuh Perbaikan", value=f"{top_complaint}", delta=f"Skor: {mean_scores.iloc[0]:.2f}", delta_color="inverse")
+    with col_kpi3:
+        top_satisfaction = mean_scores.index[-1]
+        st.metric(label="Poin Paling Memuaskan", value=f"{top_satisfaction}", delta=f"Skor: {mean_scores.iloc[-1]:.2f}")
+
+    st.markdown("---")
+
+    st.subheader("Perbandingan Antar Variabel (Poin Kekuatan vs Kelemahan)")
+
+    col_eff1, col_eff2 = st.columns(2)
+    with col_eff1:
+        st.markdown("#### 3 Poin Kritis (Skor Terendah)")
+        critical_df = mean_scores.head(3).to_frame(name='Skor Rata-Rata')
+        fig_critical = px.bar(critical_df, x='Skor Rata-Rata', y=critical_df.index, orientation='h',
+                              color='Skor Rata-Rata', color_continuous_scale=px.colors.sequential.Reds,
+                              title="Aspek dengan Efektivitas Terendah")
+        st.plotly_chart(fig_critical, use_container_width=True)
+
+    with col_eff2:
+        st.markdown("#### Perbandingan Skor Likert Berdasarkan Demografi")
+        # Find a suitable categorical column (e.g., 'Fakultas') for breakdown
+        cat_cols = [c for c in df.columns if df[c].dtype == 'object' or df[c].dtype.name == 'category']
+        if cat_cols:
+            breakdown_col = st.selectbox("Pilih Kategori Pembanding:", options=cat_cols, index=0)
+            score_col = st.selectbox("Pilih Variabel Likert:", options=numeric_cols, index=0)
+
+            grouped_mean = df.groupby(breakdown_col)[score_col].mean().sort_values(ascending=False).reset_index()
+            fig_breakdown = px.bar(grouped_mean, x=breakdown_col, y=score_col,
+                                   title=f"Skor {score_col} Berdasarkan {breakdown_col}",
+                                   color=score_col, color_continuous_scale=px.colors.sequential.Bluyl)
+            st.plotly_chart(fig_breakdown, use_container_width=True)
+        else:
+            st.info("Tidak ada kolom kategorikal yang terdeteksi untuk perbandingan demografi.")
+
+    st.markdown("---")
+    st.subheader("Kesimpulan Analisis Efektivitas Ketersediaan")
+    st.info("Berdasarkan data yang tersedia, efektivitas ketersediaan lahan parkir di UPN 'Veteran' Jawa Timur dapat disimpulkan melalui perbandingan skor rata-rata. Poin-poin dengan skor terendah (misalnya, 'Ketersediaan saat jam sibuk' atau 'Kemudahan mencari tempat') menunjukkan prioritas utama untuk perbaikan, sedangkan skor tertinggi mencerminkan area yang sudah berjalan efektif.")
 
 # ------------------ Correlation ------------------
 elif app_mode == "Korelasi":
     st.title("Analisis Korelasi")
-    st.markdown("Menampilkan korelasi antar variabel numerik (Likert). Gunakan analisis ini untuk melihat hubungan linier sederhana antar skor.")
+    st.markdown("Menampilkan korelasi antar variabel numerik (Likert). Gunakan analisis ini untuk melihat hubungan linier sederhana antar skor. Nilai mendekati **+1** berarti korelasi positif kuat, **-1** negatif kuat.")
 
     if len(numeric_cols) < 2:
         st.warning("Tidak cukup variabel numerik untuk analisis korelasi.")
@@ -154,13 +236,13 @@ elif app_mode == "Korelasi":
         cols_for_corr = st.multiselect("Pilih variabel numerik untuk korelasi", numeric_cols, default=numeric_cols[:8])
         if len(cols_for_corr) >= 2:
             corr = df[cols_for_corr].corr()
-            fig = px.imshow(corr, text_auto=True, title='Matriks Korelasi (Pearson)')
+            fig = px.imshow(corr, text_auto=".2f", title='Matriks Korelasi (Pearson)',
+                            color_continuous_scale='RdBu_r', zmin=-1, zmax=1)
             st.plotly_chart(fig, use_container_width=True)
 
             st.subheader("Tabel korelasi")
-            st.dataframe(corr)
+            st.dataframe(corr.style.background_gradient(cmap='RdBu_r', vmin=-1, vmax=1), use_container_width=True)
 
-            # Show scatter matrix for selected
             if st.checkbox("Tampilkan scatter matrix (pairwise)"):
                 fig2 = px.scatter_matrix(df[cols_for_corr].dropna(), dimensions=cols_for_corr)
                 st.plotly_chart(fig2, use_container_width=True)
@@ -170,13 +252,13 @@ elif app_mode == "Korelasi":
 # ------------------ Regression ------------------
 elif app_mode == "Regresi Linear Berganda":
     st.title("Regresi Linear Berganda")
-    st.markdown("Pilih satu variabel dependen (numerik) dan beberapa variabel independen numerik. Disarankan minimal 3 variabel independen sesuai kebutuhan tugas.")
+    st.markdown("Pilih satu variabel dependen (Y, misal: 'Kepuasan Overall') dan beberapa variabel independen (X) numerik. Ini berguna untuk memprediksi variabel Y dari kombinasi variabel X.")
 
     if len(numeric_cols) < 2:
         st.warning("Tidak cukup variabel numerik untuk regresi.")
     else:
         dep = st.selectbox("Pilih variabel dependen (Y)", options=numeric_cols)
-        indep = st.multiselect("Pilih variabel independen (X) — minimal 3", options=[c for c in numeric_cols if c!=dep])
+        indep = st.multiselect("Pilih variabel independen (X) — minimal 1", options=[c for c in numeric_cols if c!=dep])
         test_size = st.slider("Proporsi data test", 0.1, 0.5, 0.25)
 
         if len(indep) >= 1:
@@ -193,50 +275,54 @@ elif app_mode == "Regresi Linear Berganda":
             lr.fit(X_train, y_train)
             y_pred = lr.predict(X_test)
 
-            st.subheader("Hasil model (sklearn)")
-            coef = pd.Series(lr.coef_, index=indep)
-            st.write("Koefisien:")
-            st.dataframe(coef.rename('coef').to_frame())
-            st.write(f"Intercept: {lr.intercept_:.4f}")
-            st.write(f"R^2 (test): {r2_score(y_test, y_pred):.4f}")
-            st.write(f"MSE (test): {mean_squared_error(y_test, y_pred):.4f}")
+            st.subheader("Hasil model (sklearn) — Uji Prediksi")
+            col_res1, col_res2 = st.columns(2)
+            with col_res1:
+                st.write(f"R^2 (koefisien determinasi) di Test Set: **{r2_score(y_test, y_pred):.4f}**")
+                st.write(f"MSE (Mean Squared Error) di Test Set: **{mean_squared_error(y_test, y_pred):.4f}**")
+            with col_res2:
+                st.write(f"Intercept: {lr.intercept_:.4f}")
+                coef = pd.Series(lr.coef_, index=indep).to_frame('Koefisien Regresi')
+                st.dataframe(coef, use_container_width=True)
 
-            # statsmodels OLS untuk ringkasan jika user mau
-            if st.checkbox("Tampilkan ringkasan statistik (statsmodels OLS)"):
+            # statsmodels OLS for summary table
+            if st.checkbox("Tampilkan Ringkasan Statistik Penuh (statsmodels OLS)"):
                 X_const = sm.add_constant(sub[indep])
                 model = sm.OLS(sub[dep], X_const, missing='drop').fit()
                 st.text(model.summary())
 
             # Plot actual vs predicted
             fig = go.Figure()
-            fig.add_trace(go.Scatter(y=y_test, mode='markers', name='Actual'))
-            fig.add_trace(go.Scatter(y=y_pred, mode='markers', name='Predicted'))
-            fig.update_layout(title='Actual vs Predicted (test set)', xaxis_title='Index', yaxis_title=dep)
+            fig.add_trace(go.Scatter(y=y_test, mode='markers', name='Actual', marker={'opacity': 0.7}))
+            fig.add_trace(go.Scatter(y=y_pred, mode='markers', name='Predicted', marker={'opacity': 0.7}))
+            fig.update_layout(title='Actual vs Predicted (Test Set)', xaxis_title='Index Observasi', yaxis_title=dep)
             st.plotly_chart(fig, use_container_width=True)
 
-            # Guidance re: minimal predictors
-            if len(indep) < 3:
-                st.warning("Disarankan memilih setidaknya 3 variabel independen jika tugas mensyaratkan >2 X.")
         else:
-            st.info("Pilih minimal 1 variabel independen untuk memodelkan. Untuk tugas, pilih 3 atau lebih.")
+            st.info("Pilih minimal 1 variabel independen untuk memodelkan.")
 
 # ------------------ Text analysis (essay) ------------------
 elif app_mode == "Teks (essay)":
-    st.title("Analisis Jawaban Essay")
-    st.markdown("Analisis sederhana berupa frekuensi kata (top words) dan visualisasi. Ini membantu merangkum keluhan/kendala/solusi dari responden.")
+    st.title("Analisis Jawaban Essay/Open-Ended")
+    st.markdown("Analisis frekuensi kata membantu merangkum keluhan, kendala, atau saran yang paling sering diungkapkan responden.")
 
     text_cols = [c for c in df.columns if df[c].dtype == 'object']
     sel_text = st.multiselect("Pilih kolom essay/text", text_cols, default=[c for c in text_cols if 'kendala' in c.lower() or 'solusi' in c.lower()][:1])
 
     if sel_text:
         for c in sel_text:
-            st.subheader(f"Top words — {c}")
+            st.header(f"Ringkasan Kata Kunci — {c}")
             tw = top_words(df[c].astype(str), n=30)
-            fig = px.bar(tw, x='word', y='count', title=f'Top kata di kolom: {c}')
+            
+            # Use Plotly Bar chart for a better visual representation of frequency
+            fig = px.bar(tw.sort_values(by='count', ascending=True), x='count', y='word', orientation='h',
+                         title=f'Top 30 Kata Kunci di Kolom: {c}',
+                         color='count', color_continuous_scale=px.colors.sequential.Viridis)
+            fig.update_layout(yaxis={'categoryorder': 'total ascending'})
             st.plotly_chart(fig, use_container_width=True)
 
-            st.subheader("Contoh jawaban (5 baris acak)")
-            st.write(df[c].dropna().sample(min(5, df[c].dropna().shape[0])))
+            st.subheader("Contoh Jawaban Acak (5 baris)")
+            st.dataframe(df[c].dropna().sample(min(5, df[c].dropna().shape[0])).to_frame(name=c), use_container_width=True)
     else:
         st.info("Pilih minimal satu kolom teks untuk dianalisis.")
 
@@ -244,7 +330,7 @@ elif app_mode == "Teks (essay)":
 elif app_mode == "Download & Petunjuk":
     st.title("Petunjuk Deploy & Download")
     st.markdown(
-        "1. Pastikan file `app.py` dan `requirements.txt` ada di repository GitHub kamu.\n"
+        "1. Pastikan file `app.py` dan `requirements.txt` (jika ada) ada di repository GitHub kamu.\n"
         "2. Jika ingin data disertakan di repo, tambahkan `Responden.xlsx` ke repo agar Streamlit Cloud dapat membukanya.\n"
         "3. Di Streamlit Cloud (share.streamlit.io) buat New app → konek ke repo → pilih `app.py`.\n"
         "4. Jika terjadi error, buka Logs di Streamlit Cloud untuk melihat pesan kesalahan."
