@@ -138,11 +138,11 @@ df, numeric_cols = preprocess_df(df_raw) # Re-run with original data structure, 
 
 # ------------------ TOP HEADER/JUDUL DASHBOARD (Meniru style rapih) ------------------
 
-# URL Logo UPN "Veteran" Jawa Timur. Menggunakan placeholder karena URL logo spesifik tidak disediakan.
-# Ganti URL ini dengan URL logo UPN yang sebenarnya (pastikan bisa diakses publik)
-UPN_LOGO_URL = "https://placehold.co/100x100/1E90FF/FFFFFF/png?text=Logo+UPN"
-# URL Logo Parkir/Ikon (misalnya ikon mobil)
-PARKING_ICON_URL = "https://placehold.co/100x100/FFD700/000000/png?text=%23Parkir"
+# URL Logo UPN "Veteran" Jawa Timur.
+# >>> PERBAIKAN: Ganti placeholder dengan URL logo publik UPN yang sebenarnya
+UPN_LOGO_URL = "https://upnjatim.ac.id/wp-content/uploads/2025/05/cropped-logo-1.png"
+# URL Logo Parkir/Ikon (menggunakan ikon mobil/parkir)
+PARKING_ICON_URL = "https://w7.pngwing.com/pngs/46/320/png-transparent-parking-car-park-others-miscellaneous-blue-text.png" # Contoh ikon mobil/parkir
 
 st.markdown("""
     <style>
@@ -184,7 +184,8 @@ col_logo_left, col_title, col_logo_right = st.columns([1, 4, 1])
 
 with col_logo_left:
     # Menggunakan ikon UPN
-    st.image(UPN_LOGO_URL, use_column_width=True)
+    # >>> PERBAIKAN: Mengganti use_column_width=True dengan use_container_width=True
+    st.image(UPN_LOGO_URL, use_container_width=True)
 
 with col_title:
     st.markdown(f"""
@@ -198,7 +199,8 @@ with col_title:
 
 with col_logo_right:
     # Menggunakan ikon Parkir
-    st.image(PARKING_ICON_URL, use_column_width=True)
+    # >>> PERBAIKAN: Mengganti use_column_width=True dengan use_container_width=True
+    st.image(PARKING_ICON_URL, use_container_width=True)
 
 st.markdown("---") # Garis pemisah setelah header
 
@@ -334,7 +336,7 @@ for i, tab in enumerate(tabs):
             col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
             with col_kpi1:
                 st.metric(label="Rata-Rata Skor Efektivitas Keseluruhan", value=f"{overall_mean:.2f}",
-                          delta=f"{(overall_mean - 3.0)*100/3:.2f}% dari skala maks (jika skala 1-5)") # Assuming 3 is neutral
+                          delta=f"{(overall_mean - 3.0)*100/3:.2f}% dari skala maks (jika skala 1-5)", delta_color="normal") # Assuming 3 is neutral
             with col_kpi2:
                 top_complaint = mean_scores.index[0]
                 st.metric(label="Poin Paling Rentan/Butuh Perbaikan", value=f"{top_complaint}", delta=f"Skor: {mean_scores.iloc[0]:.2f}", delta_color="inverse")
