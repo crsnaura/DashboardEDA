@@ -132,7 +132,7 @@ df, numeric_cols, categorical_cols = preprocess_df(df)
 # ------------------ TOP HEADER/JUDUL DASHBOARD (Kembali ke Lahan Parkir) ------------------
 
 UPN_LOGO_URL = "https://upnjatim.ac.id/wp-content/uploads/2025/05/cropped-logo-1.png"
-PARKING_ICON_URL = "https://w7.pngwing.com/pngs/46/320/png-transparent-parking-car-park-others-miscellaneous-blue-text.png" # Contoh ikon mobil/parkir
+PARKING_ICON_URL = "https://png.pngtree.com/png-clipart/20190705/original/pngtree-vector-parking-icon-png-image_4184091.jpg" # Contoh ikon mobil/parkir
 
 st.markdown("""
     <style>
@@ -196,8 +196,8 @@ for i, tab in enumerate(tabs):
         app_mode = APP_MODES[i]
 
         # ------------------ Overview (REVISI FINAL: Teks Naratif + Semua Data Preview) ------------------
-        if app_mode == "Overview":
-            st.title("Selamat Datang di Dashboard Analisis Parkir UPN")
+        if app_mode == "Overview💌":
+            st.title("🔥Selamat Datang di Dashboard Analisis Parkir UPN🙌")
             
             # --- 1. Teks Naratif Awal (Membuat Menarik) ---
             st.markdown("""
@@ -217,21 +217,21 @@ for i, tab in enumerate(tabs):
             """, unsafe_allow_html=True)
 
             # Menampilkan Statistik Kunci (Total Responden)
-            st.info(f"Total Responden yang Sedang Dianalisis Saat Ini: **{df.shape[0]:,} orang**.")
+            st.info(f"🤷‍♀️Total Responden yang Sedang Dianalisis Saat Ini: **{df.shape[0]:,} orang**.🦋")
             st.markdown("---")
             
             # 2. Preview Data
-            st.subheader("1. Preview Data Keseluruhan (5 Baris Pertama)")
+            st.subheader("🗂️Preview Data Keseluruhan (5 Baris Pertama)")
             st.markdown("Contoh baris data untuk memverifikasi format dan isinya.")
             st.dataframe(df.head(), use_container_width=True)
             
             # 3. Ringkasan Tipe Data (Lebih Jelas)
-            st.subheader("2. Ringkasan Tipe Data & Klasifikasi Analisis")
+            st.subheader("💌Ringkasan Tipe Data & Klasifikasi Analisis")
             
             col_tip1, col_tip2 = st.columns(2)
             
             with col_tip1:
-                st.markdown("#### Preview Kolom Numerik (Skor Likert / Kuantitatif)")
+                st.markdown("#### Preview Kolom Numerik (Skor Likert / Kuantitatif)🔢")
                 if numeric_cols:
                     st.write(f"Total **{len(numeric_cols)}** Variabel:")
                     # MENAMPILKAN DATA NUMERIK SECARA LANGSUNG
@@ -240,7 +240,7 @@ for i, tab in enumerate(tabs):
                     st.warning("Tidak ada kolom numerik (Likert) yang terdeteksi.")
                     
             with col_tip2:
-                st.markdown("#### Preview Kolom Kategorikal (Demografi / Kualitatif)")
+                st.markdown("#### Preview Kolom Kategorikal (Demografi / Kualitatif)🅰️")
                 if categorical_cols:
                     st.write(f"Total **{len(categorical_cols)}** Variabel:")
                     # MENAMPILKAN DATA KATEGORIKAL SECARA LANGSUNG
@@ -252,7 +252,7 @@ for i, tab in enumerate(tabs):
 
             # 4. Analisis Data Numerik (Skor Likert)
             if len(numeric_cols) > 0:
-                st.subheader("3. Ringkasan Statistik Data Numerik (Skor Likert)")
+                st.subheader("🔢Ringkasan Statistik Data Numerik (Skor Likert)")
                 col_num_1, col_num_2 = st.columns([2, 3])
                 
                 with col_num_1:
@@ -271,13 +271,13 @@ for i, tab in enumerate(tabs):
                     fig_mean.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig_mean, use_container_width=True)
             else:
-                 st.subheader("3. Ringkasan Statistik Data Numerik (Skor Likert)")
+                 st.subheader("🔢Ringkasan Statistik Data Numerik (Skor Likert)")
                  st.info("Tidak ada kolom numerik (Likert) yang terdeteksi untuk analisis skor.")
 
             st.markdown("---")
             
             # 5. Analisis Data Kategori Utama (Demografi)
-            st.subheader("4. Distribusi Data Kategori Utama (Demografi)")
+            st.subheader("🫡Distribusi Data Kategori Utama (Demografi)")
             
             # Contoh Visualisasi (Fakultas)
             if 'Fakultas' in df.columns:
@@ -305,12 +305,12 @@ for i, tab in enumerate(tabs):
 
 
         # ------------------ Descriptive ------------------
-        elif app_mode == "Deskriptif":
-            st.title("Analisis Deskriptif & Visualisasi Variatif")
+        elif app_mode == "🗂️Deskriptif":
+            st.title("🦋Analisis Deskriptif & Visualisasi Variatif🦋")
             st.markdown("Halaman ini menampilkan statistik dasar dan distribusi data kategorikal serta numerik.")
 
             # Section 1: Demografi
-            st.header("1. Distribusi Demografi & Kategori")
+            st.header("🫨Distribusi Demografi & Kategori")
             with st.expander("Pilih kolom demografis/kategorikal untuk breakdown"):
                 
                 # Exclude obvious filter columns from the selection list for visual clarity
@@ -338,7 +338,7 @@ for i, tab in enumerate(tabs):
 
 
             # Section 2: Analisis Skor Likert
-            st.header("2. Statistik & Perbandingan Skor Likert (Numerik)")
+            st.header("🤯Statistik & Perbandingan Skor Likert (Numerik)")
             if len(numeric_cols)>0:
                 col_stat1, col_stat2 = st.columns([1, 2])
                 with col_stat1:
@@ -359,7 +359,7 @@ for i, tab in enumerate(tabs):
                 st.warning("Tidak ada kolom numerik (Likert) yang terdeteksi untuk analisis skor.")
 
         # ------------------ Effectiveness Analysis (Analisis Kunci) ------------------
-        elif app_mode == "Analisis Kunci (Efektivitas Parkir)":
+        elif app_mode == "Analisis Kunci (Efektivitas Parkir)📩":
             st.title("Analisis Kunci: Efektivitas Ketersediaan Lahan Parkir")
             st.markdown("Halaman ini menyajikan sintesis temuan yang secara langsung menjawab tujuan penelitian mengenai efektivitas lahan parkir.")
 
@@ -415,8 +415,8 @@ for i, tab in enumerate(tabs):
             st.info("Berdasarkan data yang tersedia, efektivitas ketersediaan lahan parkir di UPN 'Veteran' Jawa Timur dapat disimpulkan melalui perbandingan skor rata-rata. Poin-poin dengan skor terendah (misalnya, 'Ketersediaan saat jam sibuk' atau 'Kemudahan mencari tempat') menunjukkan prioritas utama untuk perbaikan, sedangkan skor tertinggi mencerminkan area yang sudah berjalan efektif.")
 
         # ------------------ Correlation ------------------
-        elif app_mode == "Korelasi":
-            st.title("Analisis Korelasi")
+        elif app_mode == "📊Korelasi":
+            st.title("🫨Analisis Korelasi🫨")
             st.markdown("Menampilkan korelasi antar variabel numerik (Likert). Gunakan analisis ini untuk melihat hubungan linier sederhana antar skor. Nilai mendekati **+1** berarti korelasi positif kuat, **-1** negatif kuat.")
 
             if len(numeric_cols) < 2:
@@ -436,8 +436,8 @@ for i, tab in enumerate(tabs):
                     st.info("Pilih minimal 2 variabel untuk melihat korelasi.")
 
         # ------------------ Regression ------------------
-        elif app_mode == "Regresi Linear Berganda":
-            st.title("Regresi Linear Berganda")
+        elif app_mode == "📈Regresi Linear Berganda":
+            st.title("🤗Regresi Linear Berganda🤗")
             st.markdown("Pilih satu variabel dependen (Y, misal: 'Kepuasan Overall') dan beberapa variabel independen (X) numerik. Ini berguna untuk memprediksi variabel Y dari kombinasi variabel X.")
 
             if len(numeric_cols) < 2:
@@ -488,8 +488,8 @@ for i, tab in enumerate(tabs):
                     st.info("Pilih minimal 1 variabel independen untuk memodelkan.")
 
         # ------------------ Text analysis (essay) ------------------
-        elif app_mode == "Teks (essay)":
-            st.title("Analisis Jawaban Essay/Open-Ended")
+        elif app_mode == "📉Teks (essay)":
+            st.title("🦋Analisis Jawaban Essay/Open-Ended🦋")
             st.markdown("Analisis frekuensi kata membantu merangkum keluhan, kendala, atau saran yang paling sering diungkapkan responden.")
 
             # Filter kolom teks yang mungkin adalah jawaban essay
@@ -514,8 +514,8 @@ for i, tab in enumerate(tabs):
                 st.info("Pilih minimal satu kolom teks untuk dianalisis.")
 
         # ------------------ Download & Petunjuk ------------------
-        elif app_mode == "Download & Petunjuk":
-            st.title("Petunjuk Deploy & Download")
+        elif app_mode == "📩Download & Petunjuk📩":
+            st.title("🦋Petunjuk Deploy & Download🦋")
             st.markdown(
                 "1. Pastikan file `app.py` dan `requirements.txt` (jika ada) ada di repository GitHub kamu.\n"
                 "2. Jika ingin data disertakan di repo, tambahkan `Responden.xlsx` ke repo agar Streamlit Cloud dapat membukanya.\n"
