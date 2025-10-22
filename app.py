@@ -132,7 +132,7 @@ df, numeric_cols, categorical_cols = preprocess_df(df)
 # ------------------ TOP HEADER/JUDUL DASHBOARD (Kembali ke Lahan Parkir) ------------------
 
 UPN_LOGO_URL = "https://upnjatim.ac.id/wp-content/uploads/2025/05/cropped-logo-1.png"
-PARKING_ICON_URL = "https://png.pngtree.com/png-clipart/20190705/original/pngtree-vector-parking-icon-png-image_4184091.jpg" # Contoh ikon mobil/parkir
+PARKING_ICON_URL = "https://img.freepik.com/vektor-premium/rambu-parkir-simbol-area-tempat-parkir-umum_855620-1184.jpg" # Contoh ikon mobil/parkir
 
 st.markdown("""
     <style>
@@ -175,6 +175,8 @@ with col_title:
     <div class="header-title">
         <h1>Dashboard Analisis Lahan Parkir</h1>
         <h3>Keefektivan dan Ketersediaan di UPN "Veteran" Jawa Timur</h3>
+        <h3>by SKS</h3>
+        <h3>Gaitsa Nazwa Kansa (24083010014) | Auliya Khotimatuz Zahroh (24083010061) | Carissa Naura Rajwa (24083010063)</h3>
     </div>
     """, unsafe_allow_html=True)
 
