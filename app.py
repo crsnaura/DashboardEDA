@@ -42,10 +42,10 @@ def preprocess_df(df: pd.DataFrame):
     for c in numeric_cols:
         df[c] = pd.to_numeric(df[c], errors='coerce')
 
-    # Identify categorical columns (excluding identifiers and timestamps)
+    # Identify categorical columns (excluding identifiers)
     categorical_cols = [c for c in df.columns if c not in numeric_cols and (df[c].dtype == 'object' or df[c].nunique() < 10)]
-    # Filter out columns that are likely identifiers or timestamps
-    identifier_keywords = ['nama', 'npm', 'timestamp']
+    # Filter out columns that are likely identifiers
+    identifier_keywords = ['nama', 'npm']
     categorical_cols = [c for c in categorical_cols if not any(kw in c.lower() for kw in identifier_keywords)]
 
     return df, numeric_cols, categorical_cols
@@ -67,7 +67,7 @@ def sensor_data(df: pd.DataFrame):
     for col in cols_to_censor:
         # Replace non-null, non-empty values with a censored string
         df_sensored[col] = df_sensored[col].apply(
-            lambda x: 'CENSORED_DATA' if pd.notna(x) and str(x).strip() != '' else x
+            lambda x: '***********' if pd.notna(x) and str(x).strip() != '' else x
         )
         
     return df_sensored
@@ -437,7 +437,7 @@ for i, tab in enumerate(tabs):
                 
                 if categorical_cols:
                     # Filter out columns that are likely censored identifiers from the dropdown
-                    censor_keywords = ['nama', 'npm', 'id', 'nim', 'timestamp']
+                    censor_keywords = ['nama', 'npm']
                     safe_categorical_cols = [c for c in categorical_cols if not any(kw in c.lower() for kw in censor_keywords)]
                     
                     if safe_categorical_cols:
@@ -538,7 +538,7 @@ for i, tab in enumerate(tabs):
             st.markdown("Analisis frekuensi kata membantu merangkum keluhan, kendala, atau saran yang paling sering diungkapkan responden.")
 
             # Filter kolom teks yang mungkin adalah jawaban essay
-            essay_cols = [c for c in df.columns if df[c].dtype == 'object' and not any(kw in c.lower() for kw in ['nama', 'npm', 'timestamp', 'fakultas', 'studi', 'censored'])]
+            essay_cols = [c for c in df.columns if df[c].dtype == 'object' and not any(kw in c.lower() for kw in ['nama', 'npm', 'fakultas', 'studi', 'censored'])]
             
             sel_text = st.multiselect("Pilih Kolom Teks (Essay/Jawaban Terbuka)", essay_cols, default=essay_cols[:1])
 
