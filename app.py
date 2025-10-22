@@ -183,9 +183,18 @@ with col_logo_right:
 
 st.markdown("---")
 
-# ------------------ Navigation Tabs (Menjaga nama Analisis Kunci) ------------------
+# ------------------ Navigation Tabs (Fix: Tambahkan Emoji ke APP_MODES) ------------------
 
-APP_MODES = ["Overview", "Deskriptif", "Analisis Kunci (Efektivitas Parkir)", "Korelasi", "Regresi Linear Berganda", "Teks (essay)", "Download & Petunjuk"]
+# FIX DILAKUKAN DI SINI: APP_MODES harus sama persis dengan string di if/elif di bawah.
+APP_MODES = [
+    "Overview💌",
+    "🗂️Deskriptif",
+    "Analisis Kunci (Efektivitas Parkir)📩",
+    "📊Korelasi",
+    "📈Regresi Linear Berganda",
+    "📉Teks (essay)",
+    "📩Download & Petunjuk📩"
+]
 
 # Mengganti sidebar selectbox dengan tabs
 tabs = st.tabs(APP_MODES)
@@ -193,9 +202,10 @@ tabs = st.tabs(APP_MODES)
 # Map tab index to app_mode
 for i, tab in enumerate(tabs):
     with tab:
+        # app_mode sekarang akan memiliki nilai seperti "Overview💌"
         app_mode = APP_MODES[i]
 
-        # ------------------ Overview (REVISI FINAL: Teks Naratif + Semua Data Preview) ------------------
+        # ------------------ Overview ------------------
         if app_mode == "Overview💌":
             st.title("🔥Selamat Datang di Dashboard Analisis Parkir UPN🙌")
             
@@ -266,8 +276,8 @@ for i, tab in enumerate(tabs):
                     mean_df = df[numeric_cols].mean().sort_values(ascending=True).to_frame(name='Rata-Rata Skor')
                     mean_df = mean_df.reset_index().rename(columns={'index': 'Variabel'})
                     fig_mean = px.bar(mean_df, x='Rata-Rata Skor', y='Variabel', orientation='h',
-                                    color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
-                                    title="Rata-Rata Skor Likert")
+                                      color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
+                                      title="Rata-Rata Skor Likert")
                     fig_mean.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig_mean, use_container_width=True)
             else:
@@ -284,9 +294,9 @@ for i, tab in enumerate(tabs):
                 counts = df['Fakultas'].value_counts().reset_index()
                 counts.columns = ['Fakultas', 'count']
                 fig_cat = px.pie(counts, names='Fakultas', values='count', 
-                                title=f"Proporsi Responden Berdasarkan Fakultas",
-                                color_discrete_sequence=px.colors.qualitative.Pastel,
-                                hole=.3)
+                                 title=f"Proporsi Responden Berdasarkan Fakultas",
+                                 color_discrete_sequence=px.colors.qualitative.Pastel,
+                                 hole=.3)
                 fig_cat.update_traces(textposition='inside', textinfo='percent+label')
                 st.plotly_chart(fig_cat, use_container_width=True)
             elif categorical_cols:
@@ -295,9 +305,9 @@ for i, tab in enumerate(tabs):
                 counts = df[first_cat].value_counts().reset_index()
                 counts.columns = [first_cat, 'count']
                 fig_cat = px.pie(counts, names=first_cat, values='count', 
-                                title=f"Proporsi Responden Berdasarkan {first_cat}",
-                                color_discrete_sequence=px.colors.qualitative.Pastel,
-                                hole=.3)
+                                 title=f"Proporsi Responden Berdasarkan {first_cat}",
+                                 color_discrete_sequence=px.colors.qualitative.Pastel,
+                                 hole=.3)
                 fig_cat.update_traces(textposition='inside', textinfo='percent+label')
                 st.plotly_chart(fig_cat, use_container_width=True)
             else:
@@ -329,10 +339,10 @@ for i, tab in enumerate(tabs):
                     counts = df[c].value_counts().reset_index()
                     counts.columns = [c, 'count']
                     if len(counts) <= 8:
-                         fig = px.pie(counts, names=c, values='count', title=f"Proporsi: {c}")
-                         fig.update_traces(textposition='inside', textinfo='percent+label')
+                        fig = px.pie(counts, names=c, values='count', title=f"Proporsi: {c}")
+                        fig.update_traces(textposition='inside', textinfo='percent+label')
                     else:
-                         fig = px.bar(counts.head(10), x=c, y='count', title=f"Top 10 Distribusi: {c}")
+                        fig = px.bar(counts.head(10), x=c, y='count', title=f"Top 10 Distribusi: {c}")
 
                     st.plotly_chart(fig, use_container_width=True)
 
@@ -351,8 +361,8 @@ for i, tab in enumerate(tabs):
                     mean_df = df[numeric_cols].mean().sort_values(ascending=True).to_frame(name='Rata-Rata Skor')
                     mean_df = mean_df.reset_index().rename(columns={'index': 'Variabel'})
                     fig_mean = px.bar(mean_df, x='Rata-Rata Skor', y='Variabel', orientation='h',
-                                      color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
-                                      title="Perbandingan Rata-Rata Skor Likert")
+                                        color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
+                                        title="Perbandingan Rata-Rata Skor Likert")
                     fig_mean.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig_mean, use_container_width=True)
             else:
@@ -364,8 +374,8 @@ for i, tab in enumerate(tabs):
             st.markdown("Halaman ini menyajikan sintesis temuan yang secara langsung menjawab tujuan penelitian mengenai efektivitas lahan parkir.")
 
             if len(numeric_cols) < 2:
-                 st.warning("Data numerik tidak memadai. Pastikan Anda meng-upload data survei yang mengandung skor Likert.")
-                 st.stop()
+                st.warning("Data numerik tidak memadai. Pastikan Anda meng-upload data survei yang mengandung skor Likert.")
+                st.stop()
 
             # Calculate key metrics
             mean_scores = df[numeric_cols].mean().sort_values()
@@ -374,7 +384,7 @@ for i, tab in enumerate(tabs):
             col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
             with col_kpi1:
                 st.metric(label="Rata-Rata Skor Efektivitas Keseluruhan", value=f"{overall_mean:.2f}",
-                          delta=f"{(overall_mean - 3.0)*100/3:.2f}% dari skala maks (jika skala 1-5)", delta_color="normal")
+                            delta=f"{(overall_mean - 3.0)*100/3:.2f}% dari skala maks (jika skala 1-5)", delta_color="normal")
             with col_kpi2:
                 top_complaint = mean_scores.index[0]
                 st.metric(label="Poin Paling Rentan/Butuh Perbaikan", value=f"{top_complaint}", delta=f"Skor: {mean_scores.iloc[0]:.2f}", delta_color="inverse")
@@ -391,8 +401,8 @@ for i, tab in enumerate(tabs):
                 st.markdown("#### 3 Poin Kritis (Skor Terendah)")
                 critical_df = mean_scores.head(3).to_frame(name='Skor Rata-Rata')
                 fig_critical = px.bar(critical_df, x='Skor Rata-Rata', y=critical_df.index, orientation='h',
-                                      color='Skor Rata-Rata', color_continuous_scale=px.colors.sequential.Reds,
-                                      title="Aspek dengan Efektivitas Terendah")
+                                        color='Skor Rata-Rata', color_continuous_scale=px.colors.sequential.Reds,
+                                        title="Aspek dengan Efektivitas Terendah")
                 st.plotly_chart(fig_critical, use_container_width=True)
 
             with col_eff2:
@@ -404,8 +414,8 @@ for i, tab in enumerate(tabs):
 
                     grouped_mean = df.groupby(breakdown_col)[score_col].mean().sort_values(ascending=False).reset_index()
                     fig_breakdown = px.bar(grouped_mean, x=breakdown_col, y=score_col,
-                                           title=f"Skor {score_col} Berdasarkan {breakdown_col}",
-                                           color=score_col, color_continuous_scale=px.colors.sequential.Bluyl)
+                                            title=f"Skor {score_col} Berdasarkan {breakdown_col}",
+                                            color=score_col, color_continuous_scale=px.colors.sequential.Bluyl)
                     st.plotly_chart(fig_breakdown, use_container_width=True)
                 else:
                     st.info("Tidak ada kolom kategorikal yang terdeteksi untuk perbandingan demografi.")
@@ -503,8 +513,8 @@ for i, tab in enumerate(tabs):
                     tw = top_words(df[c].astype(str), n=30)
                     
                     fig = px.bar(tw.sort_values(by='count', ascending=True), x='count', y='word', orientation='h',
-                                 title=f'Top 30 Kata Kunci di Kolom: {c}',
-                                 color='count', color_continuous_scale=px.colors.sequential.Viridis)
+                                    title=f'Top 30 Kata Kunci di Kolom: {c}',
+                                    color='count', color_continuous_scale=px.colors.sequential.Viridis)
                     fig.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig, use_container_width=True)
 
@@ -533,5 +543,3 @@ for i, tab in enumerate(tabs):
             csv = convert_df_to_csv(df)
             
             st.download_button("Download Data Hasil Filter (.csv)", csv, file_name='data_filtered_parkir.csv', mime='text/csv')
-
-# EOF
