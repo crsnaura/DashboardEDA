@@ -45,7 +45,7 @@ def preprocess_df(df: pd.DataFrame):
 
     # Identify categorical columns (excluding identifiers and timestamps)
     # Categorical are non-numeric types, or numeric types with very few unique values (though we primarily focus on object types here)
-    # NOTE: identifier_keywords are now only used for filtering 'categorical_cols' list, not for dropping columns from the main df.
+    # The actual dropping is now done BEFORE calling preprocess_df, but we keep this filter for robust categorical list generation.
     identifier_keywords = ['nama', 'npm', 'timestamp'] 
     categorical_cols = [c for c in df.columns if c not in numeric_cols and (df[c].dtype == 'object' or df[c].nunique() < 10)]
     # Filter out columns that are likely identifiers or timestamps
@@ -82,27 +82,34 @@ except Exception as e:
     load_status.error(f"Gagal memuat data utama: {default_filename}. Pastikan file ini ada. Error: {e}")
     st.stop()
 
-# --- MODIFIKASI: Hapus Kolom Identitas/Timestamp ---
+# -------------------------------------------------------------
+# --- PERBAIKAN MODIFIKASI: Hapus Kolom Identitas/Timestamp ---
+# -------------------------------------------------------------
 df_raw = df.copy()
-# Standardize columns for easier searching
-df_raw.columns = [c.strip() for c in df_raw.columns]
 
-# List keywords to drop and find the actual column names
+# 1. Standardize column names for robust searching
+original_columns = df_raw.columns.tolist()
+standardized_columns = [c.strip().lower().replace(' ', '_') for c in original_columns]
+df_raw.columns = original_columns # Keep original names for display, but use list for mapping
+
+# 2. Define keywords to drop
 keywords_to_drop = ['timestamp', 'nama', 'npm']
 columns_to_drop = []
-for col in df_raw.columns:
-    for kw in keywords_to_drop:
-        if kw in col.lower():
-            columns_to_drop.append(col)
-            break
+
+# 3. Identify and collect columns to drop based on original names and standardized match
+for original_col_name, std_col_name in zip(original_columns, standardized_columns):
+    if any(kw in std_col_name for kw in keywords_to_drop):
+        columns_to_drop.append(original_col_name)
             
-# Drop the identified columns
+# 4. Drop the identified columns
 df_raw = df_raw.drop(columns=columns_to_drop, errors='ignore')
 if columns_to_drop:
     st.sidebar.warning(f"Kolom ID/Timestamp Dihapus: {', '.join(columns_to_drop)}")
 else:
     st.sidebar.info("Tidak ada kolom ID/Timestamp yang terdeteksi untuk dihapus.")
-# --- AKHIR MODIFIKASI ---
+# -------------------------------------------------------------
+# --- AKHIR PERBAIKAN MODIFIKASI ---
+# -------------------------------------------------------------
 
 # Preprocess
 df, numeric_cols, categorical_cols = preprocess_df(df_raw)
@@ -196,7 +203,7 @@ with col_title:
     st.markdown(f"""
     <div class="header-title">
         <h1>Dashboard Analisis Lahan Parkir</h1>
-        <h3>Keefektivan dan Ketersediaan di UPN "Veteran" Jawa Timur</h3>
+        <h3>Keefektifan dan Ketersediaan di UPN "Veteran" Jawa Timur</h3>
     </div>
     """, unsafe_allow_html=True)
 
@@ -243,7 +250,7 @@ for i, tab in enumerate(tabs):
                     manajemen fasilitas kampus. Bagian ini menyajikan gambaran cepat mengenai struktur data dan ringkasan awal.
                 </p>
                 <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
-                    Gunakan filter di sidebar dan jelajahi tab "Analisis Kunci" untuk temuan utama.
+                    Gunkaan filter di sidebar dan jelajahi tab "Analisis Kunci" untuk temuan utama.
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -254,7 +261,7 @@ for i, tab in enumerate(tabs):
             
             # 2. Preview Data
             st.subheader("🗂️Preview Data Keseluruhan (5 Baris Pertama)")
-            st.markdown("Contoh baris data untuk memverifikasi format dan isinya (kolom ID telah dihapus).")
+            st.markdown("Contoh baris data untuk memverifikasi format dan isinya (kolom ID seperti NPM, Nama, dan Timestamp sudah dihapus).")
             st.dataframe(df.head(), use_container_width=True)
             
             # 3. Ringkasan Tipe Data (Lebih Jelas)
