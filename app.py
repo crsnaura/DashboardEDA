@@ -45,9 +45,10 @@ def preprocess_df(df: pd.DataFrame):
 
     # Identify categorical columns (excluding identifiers and timestamps)
     # Categorical are non-numeric types, or numeric types with very few unique values (though we primarily focus on object types here)
+    # NOTE: identifier_keywords are now only used for filtering 'categorical_cols' list, not for dropping columns from the main df.
+    identifier_keywords = ['nama', 'npm', 'timestamp'] 
     categorical_cols = [c for c in df.columns if c not in numeric_cols and (df[c].dtype == 'object' or df[c].nunique() < 10)]
     # Filter out columns that are likely identifiers or timestamps
-    identifier_keywords = ['nama', 'npm', 'timestamp']
     categorical_cols = [c for c in categorical_cols if not any(kw in c.lower() for kw in identifier_keywords)]
 
     return df, numeric_cols, categorical_cols
@@ -75,16 +76,35 @@ load_status = st.sidebar.empty()
 
 try:
     load_status.info(f"Memuat data dari {default_filename}...")
-    # NOTE: Since the file `Responden.xlsx` is not provided, this line will likely fail if run outside the user's environment.
-    # We proceed under the assumption that the file exists in the execution environment.
-    df = load_data_from_path(default_filename) 
+    df = load_data_from_path(default_filename)
     load_status.success("Data berhasil dimuat!")
 except Exception as e:
     load_status.error(f"Gagal memuat data utama: {default_filename}. Pastikan file ini ada. Error: {e}")
     st.stop()
 
-# Preprocess
+# --- MODIFIKASI: Hapus Kolom Identitas/Timestamp ---
 df_raw = df.copy()
+# Standardize columns for easier searching
+df_raw.columns = [c.strip() for c in df_raw.columns]
+
+# List keywords to drop and find the actual column names
+keywords_to_drop = ['timestamp', 'nama', 'npm']
+columns_to_drop = []
+for col in df_raw.columns:
+    for kw in keywords_to_drop:
+        if kw in col.lower():
+            columns_to_drop.append(col)
+            break
+            
+# Drop the identified columns
+df_raw = df_raw.drop(columns=columns_to_drop, errors='ignore')
+if columns_to_drop:
+    st.sidebar.warning(f"Kolom ID/Timestamp Dihapus: {', '.join(columns_to_drop)}")
+else:
+    st.sidebar.info("Tidak ada kolom ID/Timestamp yang terdeteksi untuk dihapus.")
+# --- AKHIR MODIFIKASI ---
+
+# Preprocess
 df, numeric_cols, categorical_cols = preprocess_df(df_raw)
 
 
@@ -234,7 +254,7 @@ for i, tab in enumerate(tabs):
             
             # 2. Preview Data
             st.subheader("🗂️Preview Data Keseluruhan (5 Baris Pertama)")
-            st.markdown("Contoh baris data untuk memverifikasi format dan isinya.")
+            st.markdown("Contoh baris data untuk memverifikasi format dan isinya (kolom ID telah dihapus).")
             st.dataframe(df.head(), use_container_width=True)
             
             # 3. Ringkasan Tipe Data (Lebih Jelas)
@@ -278,8 +298,8 @@ for i, tab in enumerate(tabs):
                     mean_df = df[numeric_cols].mean().sort_values(ascending=True).to_frame(name='Rata-Rata Skor')
                     mean_df = mean_df.reset_index().rename(columns={'index': 'Variabel'})
                     fig_mean = px.bar(mean_df, x='Rata-Rata Skor', y='Variabel', orientation='h',
-                                     color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
-                                     title="Rata-Rata Skor Likert")
+                                      color='Rata-Rata Skor', color_continuous_scale=px.colors.sequential.Inferno,
+                                      title="Rata-Rata Skor Likert")
                     fig_mean.update_layout(yaxis={'categoryorder': 'total ascending'})
                     st.plotly_chart(fig_mean, use_container_width=True)
             else:
@@ -403,8 +423,8 @@ for i, tab in enumerate(tabs):
                 st.markdown("#### 3 Poin Kritis (Skor Terendah)")
                 critical_df = mean_scores.head(3).to_frame(name='Skor Rata-Rata')
                 fig_critical = px.bar(critical_df, x='Skor Rata-Rata', y=critical_df.index, orientation='h',
-                                     color='Skor Rata-Rata', color_continuous_scale=px.colors.sequential.Reds,
-                                     title="Aspek dengan Efektivitas Terendah")
+                                      color='Skor Rata-Rata', color_continuous_scale=px.colors.sequential.Reds,
+                                      title="Aspek dengan Efektivitas Terendah")
                 st.plotly_chart(fig_critical, use_container_width=True)
 
             with col_eff2:
@@ -416,8 +436,8 @@ for i, tab in enumerate(tabs):
 
                     grouped_mean = df.groupby(breakdown_col)[score_col].mean().sort_values(ascending=False).reset_index()
                     fig_breakdown = px.bar(grouped_mean, x=breakdown_col, y=score_col,
-                                         title=f"Skor {score_col} Berdasarkan {breakdown_col}",
-                                         color=score_col, color_continuous_scale=px.colors.sequential.Bluyl)
+                                           title=f"Skor {score_col} Berdasarkan {breakdown_col}",
+                                           color=score_col, color_continuous_scale=px.colors.sequential.Bluyl)
                     st.plotly_chart(fig_breakdown, use_container_width=True)
                 else:
                     st.info("Tidak ada kolom kategorikal yang terdeteksi untuk perbandingan demografi.")
@@ -438,7 +458,7 @@ for i, tab in enumerate(tabs):
                 if len(cols_for_corr) >= 2:
                     corr = df[cols_for_corr].corr()
                     fig = px.imshow(corr, text_auto=".2f", title='Matriks Korelasi (Pearson)',
-                                     color_continuous_scale='RdBu_r', zmin=-1, zmax=1)
+                                    color_continuous_scale='RdBu_r', zmin=-1, zmax=1)
                     st.plotly_chart(fig, use_container_width=True)
 
                     st.subheader("Tabel korelasi")
